@@ -430,7 +430,8 @@ SCREENS.archive = () => {
 };
 
 /* ---------- storage: Даша's private repo (sync.js) ---------- */
-const GH_NEW = 'https://github.com/settings/personal-access-tokens/new?name=Oki&description=' + encodeURIComponent('Oki: задачи в закрытом хранилище')
+// GitHub wants a unique token name: a second phone or a reconnect gets «Oki 11.10.2026 14:32»
+const GH_NEW = 'https://github.com/settings/personal-access-tokens/new?name=' + encodeURIComponent('Oki ' + new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '')) + '&description=' + encodeURIComponent('Oki: задачи в закрытом хранилище')
   + '&expires_in=366&contents=write&actions=write&secrets=write';
 const GH_ERR = {
   offline: 'Нет сети. Сохраню, когда появится.',
