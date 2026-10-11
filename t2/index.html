@@ -36,5 +36,12 @@
 <script src="sync.js"></script>
 <script src="app.js"></script>
 <script src="motion.js"></script>
+<script>
+// trial page only: tiny numbers for Claude to read off the screenshot
+setTimeout(() => { const d = document.createElement('div'); const cs = getComputedStyle(document.documentElement);
+  d.style.cssText = 'position:fixed;left:0;right:0;top:50%;text-align:center;font:11px monospace;color:#c00;z-index:999;pointer-events:none';
+  d.textContent = `s${screen.height} i${innerHeight} t${getComputedStyle(document.getElementById('satprobe')).paddingTop} x${cs.getPropertyValue('--xb')} st${navigator.standalone}`;
+  document.body.append(d); }, 800);
+</script>
 </body>
 </html>
