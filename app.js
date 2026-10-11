@@ -531,7 +531,7 @@ function closeSheet() {
   setTimeout(() => { if (!L.classList.contains('on')) L.innerHTML = ''; }, 330);
 }
 let tt;
-function toast(msg) { const T = $('#toast'); T.textContent = msg; T.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => T.classList.remove('on'), 2200); }
+function toast(msg) { const T = $('#toast'); T.textContent = msg; T.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => T.classList.remove('on'), Math.max(2200, msg.length * 60)); }
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch (e) {
     const a = document.createElement('textarea'); a.value = text; a.style.position = 'fixed'; a.style.opacity = '0'; document.body.append(a); a.select();
@@ -795,7 +795,7 @@ document.addEventListener('click', e => { if (e.target.matches('input.over') && 
 // storage status lives in Настройки; when saving breaks, say so once (TZ §10: no silent failures)
 Sync.sub(() => {
   const k = Sync.st.status;
-  if (GH_ERR[k] && k !== 'offline' && k !== 'busy' && Sync.st.told !== k) { Sync.st.told = k; toast(GH_ERR[k] + ' Подробнее в Настройках.'); }
+  if (GH_ERR[k] && k !== 'offline' && k !== 'busy' && Sync.st.told !== k) { Sync.st.told = k; toast(GH_ERR[k] + ' Подробнее — в Настройках.'); }
   if (k === 'ok') Sync.st.told = '';
   if (['settings', 'off'].includes(Nav.cur?.r.name)) render();
 });

@@ -62,7 +62,7 @@ body.r-home #bg .b3{right:auto;left:10px;width:380px;height:300px;bottom:-120px}
 .menu i::before{top:-5px}.menu i::after{top:5px}
 .home-main{flex:1;min-height:0;display:flex;flex-direction:column;padding:0 24px;overflow:hidden}
 .stage{flex:1 1 300px;min-height:120px;max-height:300px;display:flex;justify-content:center;align-items:stretch}
-.stage svg{height:100%;width:auto;max-width:100%}
+.stage svg{height:100%;width:100%;display:block}
 .greet{text-align:center;flex:none}
 .greet h1{font-weight:300;font-size:38px;line-height:1.02;letter-spacing:-.035em;margin:0 0 11px}
 .greet h1 .g{position:relative;display:inline-block;isolation:isolate}
@@ -259,8 +259,9 @@ mark{background:rgba(195,199,244,.8);color:inherit;border-radius:3px;padding:0 1
 
 /* onboarding */
 .onb{flex:1;display:flex;flex-direction:column;align-items:center;padding:calc(var(--st) + 20px) 28px calc(var(--sb) + 8px);text-align:center}
-.onb .rb{flex:1 1 270px;min-height:150px;max-height:280px;margin:18px 0}
-.onb .rb svg{height:100%;width:auto}
+/* full-width box, the drawing centres itself inside (Safari sized width:auto svgs before the height was known) */
+.onb .rb{flex:1 1 270px;min-height:150px;max-height:280px;margin:18px 0;align-self:stretch}
+.onb .rb svg{height:100%;width:100%;display:block}
 .onb h1{font-weight:300;font-size:30px;line-height:1.15;letter-spacing:-.03em}
 .onb p{font-weight:300;font-size:16px;line-height:1.45;color:var(--ink2);margin-top:12px}
 .onb .bt{width:100%;margin-top:auto;padding-top:24px}
@@ -303,7 +304,7 @@ a.btn-main,a.btn-ghost{text-decoration:none}
 
 /* toast */
 #toast{position:fixed;left:50%;bottom:calc(var(--sb) + 150px);transform:translate(-50%,20px);opacity:0;z-index:80;
-  background:var(--ink);color:#fff;font-size:14px;padding:11px 18px;border-radius:22px;white-space:nowrap;pointer-events:none;transition:opacity .2s,transform .2s;
+  background:var(--ink);color:#fff;font-size:14px;padding:11px 18px;border-radius:22px;width:max-content;max-width:calc(100vw - 48px);text-align:center;line-height:1.35;pointer-events:none;transition:opacity .2s,transform .2s;
   box-shadow:0 10px 30px rgba(20,24,60,.3)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 
