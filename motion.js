@@ -30,12 +30,14 @@ function syncDock(name, animate = true) {
 }
 // the dot under the active tab; pos is fractional while a finger pages between tabs
 function placeInd(pos, animate) {
-  const b = tabBtns(), at = i => [b[i].offsetLeft + b[i].offsetWidth / 2 - 2, b[i].offsetTop + b[i].offsetHeight + 2];
+  // the white pill behind the active tab
+  const b = tabBtns(), at = i => b[i].offsetLeft;
   const i = Math.max(0, Math.min(TABS.length - 1, Math.floor(pos))), f = Math.max(0, Math.min(1, pos - i));
   const p = at(i), q = f ? at(Math.min(i + 1, TABS.length - 1)) : p;
   const ind = dockEl.querySelector('.ind');
   ind.style.transition = animate ? '' : 'none';
-  ind.style.transform = `translate(${p[0] + (q[0] - p[0]) * f}px,${p[1]}px)`;
+  ind.style.width = b[i].offsetWidth + 'px';
+  ind.style.transform = `translateX(${p + (q - p) * f}px)`;
 }
 new ResizeObserver(() => { view.style.setProperty('--dockh', dockEl.offsetHeight + 'px'); if (Nav.cur) syncDock(Nav.cur.r.name, false); }).observe(dockEl);
 document.fonts?.ready.then(() => Nav.cur && syncDock(Nav.cur.r.name, false));
@@ -72,7 +74,7 @@ function settle(el, r) {
 }
 function calScroll() {
   const cal = this.querySelector('.cal'), wk = this.querySelector('.wkwrap');
-  if (cal && wk) wk.classList.toggle('show', cal.getBoundingClientRect().bottom < this.getBoundingClientRect().top + 90);
+  if (cal && wk) wk.classList.toggle('show', cal.getBoundingClientRect().bottom < this.getBoundingClientRect().top + parseFloat(getComputedStyle(this).paddingTop) + 88);
 }
 function hop(el) {
   if (!ui.hop || Date.now() - ui.hop > 4000) return;
@@ -84,7 +86,8 @@ const saveScroll = c => { const m = c?.el.querySelector('.main'); if (m) ui.scro
 /* ---------- navigation ---------- */
 function go(p) {
   const to = route('#/' + p), cur = Nav.cur?.r;
-  if (cur && to.key === cur.key) return;
+  // the tab you are on, tapped again: back to the top of its list
+  if (cur && to.key === cur.key) { Nav.cur.el.querySelector('.main')?.scrollTo({ top: 0, behavior: RM.matches ? 'auto' : 'smooth' }); return; }
   if (isTab(to.name)) { Nav.intent = { anim: !cur || isTab(cur.name) ? 'tab' : 'pop', stack: 'reset' }; location.replace(to.key); }
   else { Nav.intent = { anim: 'push', stack: 'push' }; location.hash = to.key; }
 }

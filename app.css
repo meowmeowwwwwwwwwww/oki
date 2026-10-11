@@ -38,7 +38,8 @@ body.r-home #bg .b3{right:auto;left:10px;width:380px;height:300px;bottom:-120px}
 .main{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:0 24px 32px;
   -webkit-mask-image:linear-gradient(transparent,#000 10px,#000 calc(100% - 44px),transparent);mask-image:linear-gradient(transparent,#000 10px,#000 calc(100% - 44px),transparent)}
 .main::-webkit-scrollbar,.chips::-webkit-scrollbar{display:none}
-.dock{flex:none;padding:8px 24px calc(var(--sb) + 2px)}
+.dock{flex:none;padding:8px 16px max(calc(var(--sb) - 12px), 8px)}
+.dock .inp{padding:0 4px}
 
 /* rabbit */
 .eyes{transform-box:fill-box;transform-origin:center;animation:blink 5s infinite}
@@ -80,6 +81,14 @@ body.r-home #bg .b3{right:auto;left:10px;width:380px;height:300px;bottom:-120px}
 .hd{display:flex;align-items:flex-end;justify-content:space-between;min-height:76px}
 .hd h1{font-weight:300;font-size:44px;line-height:1;letter-spacing:-.04em}
 .hd .bun{width:58px;height:76px;margin-bottom:-4px;flex:none}
+/* list screens: the header lives inside the list and scrolls away; content fades under the clock */
+.main.lst{padding-top:calc(var(--st) + 2px);
+  -webkit-mask-image:linear-gradient(transparent calc(var(--st) - 16px),#000 calc(var(--st) + 4px),#000 calc(100% - 44px),transparent);mask-image:linear-gradient(transparent calc(var(--st) - 16px),#000 calc(var(--st) + 4px),#000 calc(100% - 44px),transparent)}
+.hdr{display:flex;align-items:flex-end;gap:6px}
+.repi{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;margin-bottom:10px;transition:transform .14s cubic-bezier(.2,.8,.2,1)}
+.repi svg{width:16px;height:16px;fill:none;stroke:var(--ink);stroke-width:1.5;stroke-linecap:round}
+.repi:active{transform:scale(.94)}
+.lgap{height:4px}
 .say{font-weight:300;font-size:16px;color:var(--ink2);letter-spacing:-.01em;margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:32px}
 .rep{flex:none;height:32px;padding:0 14px;border-radius:16px;display:flex;align-items:center;gap:7px;font-size:14px;color:var(--ink)}
 .rep svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round}
@@ -133,15 +142,18 @@ body.r-home #bg .b3{right:auto;left:10px;width:380px;height:300px;bottom:-120px}
 
 /* dock: input + tabs */
 .inp{display:flex;gap:10px;align-items:center}
-.field{flex:1;min-width:0;height:54px;border-radius:27px;display:flex;align-items:center;padding:0 20px}
+.field{flex:1;min-width:0;height:50px;border-radius:25px;display:flex;align-items:center;padding:0 20px}
 .field input{width:100%;border:0;outline:0;background:none;font-size:16px;font-weight:300}
 .field input::placeholder{color:var(--ink3);opacity:1}
-.mic{width:54px;height:54px;border-radius:50%;background:var(--ink);display:grid;place-items:center;flex:none;box-shadow:0 0 0 6px rgba(195,199,244,.55),0 11px 30px rgba(110,116,220,.55)}
+.mic{width:50px;height:50px;border-radius:50%;background:var(--ink);display:grid;place-items:center;flex:none;box-shadow:0 0 0 6px rgba(195,199,244,.55),0 11px 30px rgba(110,116,220,.55)}
 .mic svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.6;stroke-linecap:round}
-.tabs{display:flex;justify-content:space-between;font-size:13px;color:var(--ink3);margin-top:16px;padding:6px 0 10px;position:relative}
-.tabs button{color:inherit;font-size:13px;position:relative;padding:4px 0;transition:color .2s}
+/* tabs: a floating glass capsule, icons with captions, a white pill slides under the active one */
+.tabs{display:flex;align-items:center;margin-top:10px;height:64px;border-radius:32px;padding:0 5px;position:relative}
+.tabs button{flex:1;min-width:0;height:54px;border-radius:27px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10.5px;color:var(--ink3);position:relative;z-index:1;transition:color .2s}
+.tabs button svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .tabs button.on{font-weight:500;color:var(--ink)}
-.tabs .ind{position:absolute;left:0;top:0;width:4px;height:4px;border-radius:50%;background:var(--ink);transition:transform .42s cubic-bezier(.32,.72,0,1)}
+.tabs button.on svg{stroke-width:1.8}
+.tabs .ind{position:absolute;left:0;top:5px;height:54px;width:20%;border-radius:27px;background:rgba(255,255,255,.85);box-shadow:0 4px 14px rgba(60,66,120,.12);transition:transform .42s cubic-bezier(.32,.72,0,1)}
 
 /* calendar */
 .cal{border-radius:24px;padding:14px 14px 10px;margin-top:12px}
@@ -164,7 +176,7 @@ body.r-home #bg .b3{right:auto;left:10px;width:380px;height:300px;bottom:-120px}
 .wk div small{font-size:11.5px;color:var(--ink3)}
 .wk div.on{background:var(--ink);color:#fff}
 .wk div.on small{color:rgba(255,255,255,.6)}
-.wkwrap{position:sticky;top:0;z-index:5;height:0;overflow:visible;opacity:0;pointer-events:none;transition:opacity .2s}
+.wkwrap{position:sticky;top:calc(var(--st) + 4px);z-index:5;height:0;overflow:visible;opacity:0;pointer-events:none;transition:opacity .2s}
 .wkwrap .wk{margin-top:4px}
 .wkwrap.show{opacity:1;pointer-events:auto}
 .agh{display:flex;justify-content:space-between;align-items:baseline;padding:16px 4px 8px;font-size:14px;font-weight:500}

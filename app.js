@@ -119,8 +119,16 @@ const ui = { chip: { work: 'all', study: 'all' }, open: {}, cal: today(), month:
 
 /* ---------- pieces ---------- */
 const grp = (n, c, cls = '') => `<div class="grp ${cls}">${esc(n)}<span>${c}</span></div>`;
-const tabs = cur => `<nav class="tabs">${[['home', 'Главная'], ['work', 'Работа'], ['study', 'Учёба'], ['personal', 'Личное'], ['cal', 'Календарь']]
-  .map(([k, n]) => `<button type="button" data-go="${k}" class="${k === cur ? 'on' : ''}">${n}</button>`).join('')}<i class="ind"></i></nav>`;
+// tab icons (variant 2, Даша 2026-10-12): rabbit, briefcase, book, heart, calendar in a floating glass capsule
+const TABI = {
+  home: '<ellipse cx="9" cy="7" rx="2.2" ry="5" transform="rotate(-12 9 7)"/><ellipse cx="15" cy="7" rx="2.2" ry="5" transform="rotate(12 15 7)"/><circle cx="12" cy="15.5" r="5.5"/>',
+  work: '<rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/><path d="M9 7.5V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v1.5M3 12.5h18"/>',
+  study: '<path d="M12 6.8C10 5.3 7 4.8 3.5 5.3v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5v-13c-3.5-.5-6.5 0-8.5 1.5zM12 6.8v13"/>',
+  personal: '<path d="M12 19.5s-7.5-4.4-7.5-9.8A4.1 4.1 0 0 1 12 7.4a4.1 4.1 0 0 1 7.5 2.3c0 5.4-7.5 9.8-7.5 9.8z"/>',
+  cal: '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/>',
+};
+const tabs = cur => `<nav class="tabs glass"><i class="ind"></i>${[['home', 'Главная'], ['work', 'Работа'], ['study', 'Учёба'], ['personal', 'Личное'], ['cal', 'Календарь']]
+  .map(([k, n]) => `<button type="button" data-go="${k}" class="${k === cur ? 'on' : ''}"><svg viewBox="0 0 24 24" aria-hidden="true">${TABI[k]}</svg>${n}</button>`).join('')}</nav>`;
 const dock = (cur, ph) => `<div class="dock"><form class="inp" data-submit="quick">
   <label class="field glass"><input name="q" placeholder="${ph}" autocomplete="off" enterkeyhint="done"></label>
   <button type="button" class="mic" data-act="mic" aria-label="Голосом">${MIC}</button></form>${tabs(cur)}</div>`;
@@ -263,10 +271,10 @@ function areaScreen(area) {
     });
   }
   if (!body) body = `<div class="empty">Здесь пока пусто. Напишите задачу внизу — она появится здесь.</div>`;
-  const rep = area === 'work' ? `<button class="rep glass" data-go="report/work">${DOC}Отчёт</button>` : '';
-  return `<div class="top"><div class="hd"><h1>${A.name}</h1>${RABBIT(mood(all, 1), 'bun')}</div>
-      <div class="say"><span></span>${rep}</div>${chips}</div>
-    <div class="main">${body}</div>`;
+  // the header scrolls away with the list (variant Б, Даша 2026-10-12); «Отчёт» is a round icon by the rabbit
+  const rep = area === 'work' ? `<button class="repi glass" data-go="report/work" aria-label="Отчёт">${DOC}</button>` : '';
+  return `<div class="main lst"><div class="hd"><h1>${A.name}</h1><span class="hdr">${rep}${RABBIT(mood(all, 1), 'bun')}</span></div>
+      ${chips}<div class="lgap"></div>${body}</div>`;
 }
 SCREENS.work = () => areaScreen('work');
 SCREENS.study = () => areaScreen('study');
@@ -303,8 +311,7 @@ SCREENS.cal = () => {
   const firstClash = evs.find(e => cl.has(e.id));
   const dayName = sel === t ? 'Сегодня' : sel === addDays(t, 1) ? 'Завтра' : `${pd(sel).getDate()} ${MONG[pd(sel).getMonth()]}`;
   const say = n ? `${dayName} ${N(n, ['дело', 'дела', 'дел'])}.${firstClash ? ` Есть накладка в ${firstClash.start}.` : ''}` : `${dayName} свободно.`;
-  return `<div class="top"><div class="hd"><h1>${MONN[m - 1]}</h1>${RABBIT('calm', 'bun')}</div><div class="say"><span></span></div></div>
-    <div class="main" data-cal>
+  return `<div class="main lst" data-cal><div class="hd"><h1>${MONN[m - 1]}</h1>${RABBIT('calm', 'bun')}</div>
       <div class="wkwrap"><div class="wk">${wk}</div></div>
       <div class="cal glass"><div class="mh">${y}<span class="nav"><button data-act="month" data-v="-1" aria-label="Назад">‹</button><button data-act="month" data-v="1" aria-label="Вперёд">›</button></span></div><div class="g">${g}</div></div>
       ${list}
