@@ -55,6 +55,13 @@ const Store = (() => {
     },
     // written by the Telegram collector: the chat says it is done or not needed; Даша decides
     task_maybe_done(a) { const t = task(a.ref); if (t.done || t.notTask) return; t.check = true; t.checkKind = 'done'; t.checkHow = a.how; t.checkWhy = a.why; },
+    // a task that comes back every day (Даша 2026-10-12): `days` keeps the dates it was ticked
+    task_daily(a) {
+      const t = task(a.ref);
+      if (a.daily) Object.assign(t, { daily: true, start: a.start, time: a.time || null, due: null, done: false, doneAt: null, days: t.days || [] });
+      else Object.assign(t, { daily: false, due: a.due || null, time: a.due ? (a.time || null) : null });
+    },
+    daily_done(a) { const t = task(a.ref), d = new Set(t.days || []); a.done ? d.add(a.day) : d.delete(a.day); t.days = [...d].sort().slice(-400); },
     task_delete(a) { state.tasks = state.tasks.filter(t => t.id !== a.ref); },
     item_add(a) { task(a.ref).items.push({ t: a.text, done: false }); },
     item_done(a) { task(a.ref).items[a.i].done = a.done; },

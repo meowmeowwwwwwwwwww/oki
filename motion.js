@@ -428,6 +428,9 @@ const CI = {
 function ctxItems(t) {
   const it = (c, label, ico) => `<button type="button" class="ci" data-c="${c}" role="menuitem"><span>${label}</span><svg viewBox="0 0 24 24">${CI[ico]}</svg></button>`;
   const end = t.source?.kind === 'вручную' ? it('del', 'Удалить', 'del') : t.check && t.checkKind !== 'done' ? '' : it('not', 'Не задача', 'not');
+  const dn = isDone(t);
+  // «каждый день» on Главная: no «На завтра» and no groups, it simply comes back tomorrow
+  if (t.daily) return it('done', dn ? 'Не сделано' : 'Сделано', dn ? 'undo' : 'done') + it('edit', 'Изменить', 'edit') + (end ? '<i class="cgap"></i>' + end : '');
   return it('done', t.done ? 'Вернуть в работу' : 'Сделано', t.done ? 'undo' : 'done')
     + it('edit', 'Изменить', 'edit')
     + (t.done ? '' : it('later', t.due === addDays(today(), 1) ? 'На послезавтра' : 'На завтра', 'later'))
@@ -490,7 +493,7 @@ function ctxPick(c) {
   // copying needs the finger's own moment: Safari refuses the clipboard a beat later
   if (c === 'prompt') { A.prompt({ dataset: { id: t.id } }); return ctxClose(); }
   ctxClose({
-    done: () => { const was = t.done; toggleDone(t.id); toast(was ? 'Возвращено в работу' : 'Сделано', { label: 'Вернуть', fn: () => toggleDone(t.id) }); },
+    done: () => { const was = isDone(t); toggleDone(t.id); toast(was ? (t.daily ? 'Отметка снята' : 'Возвращено в работу') : 'Сделано', { label: 'Вернуть', fn: () => toggleDone(t.id) }); },
     edit: () => openEdit(t),
     later: () => { const d = addDays(today(), t.due === addDays(today(), 1) ? 2 : 1); Store.act('task_due', { ref: t.id, due: d, time: t.time }); toast(`Перенесено на ${dayWord(d)}`); },
     move: () => openMove(t),

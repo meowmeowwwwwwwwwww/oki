@@ -44,6 +44,9 @@ function Sample(now) {
     T({ area: 'personal', title: 'Записаться к стоматологу', due: D(3), source: src('заметки', -3) }),
     T({ area: 'personal', title: 'Подарок Лене', due: D(6), source: src('заметки', -2), items: it('-Книга|-Свеча') }),
     T({ area: 'personal', title: 'Разобрать зимние вещи', source: src('заметки', -6) }),
+    // Каждый день — живут на Главной; таблетки вчера не отмечены
+    T({ area: 'personal', title: 'Выпить таблетки', daily: true, start: D(-6), time: '09:00', days: [D(-6), D(-5), D(-4), D(-3), D(-2)], source: { kind: 'вручную', date: D(-6) } }),
+    T({ area: 'personal', title: 'Полить цветы', daily: true, start: D(-6), days: [D(-4), D(-2), D(-1)], source: { kind: 'вручную', date: D(-6) } }),
     // Сделано — для архива и отчёта
     T({ area: 'work', group: 'Лето', title: 'Обложка и разворот 1–2', due: D(-3), done: true, doneAt: AT(-3, '17:40'), from: 'Аня', source: src('почта', -8) }),
     T({ area: 'work', group: 'Лето', title: 'Финальные цвета обложки', due: D(-2), done: true, doneAt: AT(-2, '15:05'), from: 'Аня', source: src('почта', -6) }),

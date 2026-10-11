@@ -94,12 +94,19 @@ function RING(p) {
 }
 
 /* ---------- selectors ---------- */
-const live = () => S().tasks.filter(t => !t.notTask);
+// «каждый день» tasks live only on Главная: lists, calendar and reports don't see them
+const live = () => S().tasks.filter(t => !t.notTask && !t.daily);
+const dailyList = () => S().tasks.filter(t => t.daily && !t.notTask && (t.start || '') <= today())
+  .sort((a, b) => (a.time || '99').localeCompare(b.time || '99') || a.title.localeCompare(b.title, 'ru'));
+const doneOn = (t, d) => (t.days || []).includes(d);
+const isDone = t => t.daily ? doneOn(t, today()) : !!t.done;
+// yesterday was a «каждый день» day, it was not ticked, and today isn't ticked yet
+const missed = t => t.daily && (t.start || '') < today() && !doneOn(t, addDays(today(), -1)) && !doneOn(t, today());
 const open = () => live().filter(t => !t.done);
 const overdue = t => !t.done && t.due && t.due < today();
 const dueToday = t => !t.done && t.due && t.due <= today();
 // done tasks stay in lists until the end of the next day, then live in the archive
-const shown = t => !t.notTask && (!t.done || (t.doneAt && diff(today(), t.doneAt) <= 1));
+const shown = t => !t.notTask && !t.daily && (!t.done || (t.doneAt && diff(today(), t.doneAt) <= 1));
 const doneToday = () => live().filter(t => t.done && t.doneAt && t.doneAt.slice(0, 10) === today()).length;
 function mood(list, sadAt) {
   const late = list.filter(overdue).length;
@@ -207,9 +214,17 @@ SCREENS.home = () => {
       <div class="stage">${RABBIT(mood(live(), 2), '', true)}</div>
       <div class="greet"><h1>${hi},<br><span class="g" data-t="${name}">${name}</span></h1><p>${line}</p></div>
       <div class="hchips">${['work', 'study', 'personal'].map(a => `<div class="chip glass" data-go="${a}">${AREAS[a].low} <span>${c[a] || '—'}</span></div>`).join('')}</div>
-      ${nearCard()}
+      ${dailyCard()}${nearCard()}
     </div>`;
 };
+// variant В (Даша 2026-10-12): what repeats every day sits on Главная, ticked right here
+function dailyCard() {
+  const l = dailyList(); if (!l.length) return '';
+  const row = t => { const dn = doneOn(t, today()), m = [missed(t) ? '<span class="ov">вчера пропущено</span>' : '', t.time ? `<span>${t.time}</span>` : ''].join('');
+    return `<div class="task${dn ? ' done' : ''}" data-go="task/${t.id}" data-tid="${t.id}"><span class="ck" data-act="done" data-id="${t.id}" role="checkbox" aria-checked="${dn}"></span>
+      <div class="body"><div class="t">${esc(t.title)}</div>${m ? `<div class="m">${m}</div>` : ''}</div></div>`; };
+  return `<div class="daily glass"><div class="r"><span>Каждый день</span><span>${l.filter(t => doneOn(t, today())).length} из ${l.length}</span></div>${l.map(row).join('')}</div>`;
+}
 function nearCard() {
   const t = today(), now = nowHM();
   const evs = [...dayEvents(t).filter(e => e.end > now), ...dayEvents(addDays(t, 1))];
@@ -324,28 +339,33 @@ SCREENS.task = r => {
   const A = AREAS[t.area];
   const n = t.items.length, k = t.items.filter(i => i.done).length, next = t.items.find(i => !i.done);
   // variant Б (Даша 2026-10-12): the round check sits by the title, rare actions live in «…»
-  const lbl = [t.group || A.name, t.done && t.doneAt ? `сделано ${dayWord(t.doneAt)}` : ''].filter(Boolean).map(esc).join(' · ');
+  const dn = isDone(t);
+  const lbl = t.daily ? ['Каждый день', missed(t) ? 'вчера пропущено' : ''].filter(Boolean).join(' · ')
+    : [t.group || A.name, t.done && t.doneAt ? `сделано ${dayWord(t.doneAt)}` : ''].filter(Boolean).map(esc).join(' · ');
   const ring = t.big ? `<div class="rg"><span>${RING(n ? k / n : 0)}${next ? 'Дальше: ' + esc(next.t) : 'Все пункты готовы'}</span><span>${k} из ${n}</span></div>` : '';
   const check = !t.check ? '' : t.checkKind === 'done' ? `<div class="check"><b>${t.checkHow === 'cancel' ? 'Похоже, уже не нужно' : 'Похоже, уже сделано'}</b><p>${esc((t.checkWhy || '').replace(/^Похоже[^:]*:\s*/, 'В переписке: '))}</p>
     <div class="acts"><button class="pill w" data-act="shut" data-id="${t.id}">Закрыть задачу</button><button class="pill" data-act="confirm" data-id="${t.id}">Ещё нет</button></div></div><div class="gap"></div><div class="gap"></div>`
     : `<div class="check"><b>Проверьте</b><p>${esc(t.checkWhy || 'Сомневаюсь, что это задача.')}</p>
     <div class="acts"><button class="pill w" data-act="confirm" data-id="${t.id}">Да, задача</button><button class="pill" data-act="not" data-id="${t.id}">Не задача</button></div></div><div class="gap"></div><div class="gap"></div>`;
   const src = t.source || {};
-  const info = `<div class="card glass">
-    <div class="row2 chev"><span>Срок</span><span class="v">${t.due ? short(t.due) + (t.done ? '' : ' · ' + inDays(t.due)) : '<span class="pill dark">Поставить срок</span>'}</span>
+  const when = t.daily ? `<div class="row2"><span>Повторяется</span><span class="v">каждый день${t.start > today() ? ', с ' + dayMon(t.start) : ''}</span></div>
+    <div class="row2 chev"><span>Время</span><span class="v">${t.time || 'не указано'}</span><input class="over" type="time" value="${t.time || ''}" data-change="time" data-id="${t.id}" aria-label="Время"></div>`
+    : `<div class="row2 chev"><span>Срок</span><span class="v">${t.due ? short(t.due) + (t.done ? '' : ' · ' + inDays(t.due)) : '<span class="pill dark">Поставить срок</span>'}</span>
       <input class="over" type="date" value="${t.due || ''}" data-change="due" data-id="${t.id}" aria-label="Срок"></div>
-    ${t.due ? `<div class="row2 chev"><span>Время</span><span class="v">${t.time || 'не указано'}</span><input class="over" type="time" value="${t.time || ''}" data-change="time" data-id="${t.id}" aria-label="Время"></div>` : ''}
+    ${t.due ? `<div class="row2 chev"><span>Время</span><span class="v">${t.time || 'не указано'}</span><input class="over" type="time" value="${t.time || ''}" data-change="time" data-id="${t.id}" aria-label="Время"></div>` : ''}`;
+  const info = `<div class="card glass">${when}
     ${t.from ? `<div class="row2"><span>От кого</span><span class="v">${esc(t.from)}</span></div>` : ''}
     ${srcAll(t).map((src, i) => `<div class="row2"${src.quote ? ' style="border:0"' : ''}><span>${i ? '' : 'Откуда'}</span><span class="v">${src.kind === 'вручную' ? 'добавлено вручную' : esc(src.kind)}${src.chat && src.chat !== 'Избранное' ? ' · ' + esc(src.chat) : src.chat ? ', «Избранное»' : ''}${src.date ? ', ' + dayMon(src.date) : ''}</span></div>
     ${src.quote ? `<div class="quote">«${esc(src.quote)}»</div>` : ''}`).join('')}</div>`;
-  const nudge = !t.due && !t.done ? '<div class="ws" style="padding:8px 4px 0">Срока нет — без него напоминаний не будет.</div>' : '';
+  const nudge = !t.due && !t.done && !t.daily ? '<div class="ws" style="padding:8px 4px 0">Срока нет — без него напоминаний не будет.</div>' : '';
   const chk = `<div class="chk glass"><div class="subs">${n ? `<div class="cnt">${k} из ${n}</div>` : ''}${t.items.map((it, i) =>
     `<div class="si${it.done ? ' ok' : ''}" data-act="item" data-id="${t.id}" data-i="${i}"><i></i>${esc(it.t)}</div>`).join('')}
     <form class="add" data-submit="item" data-id="${t.id}"><i></i><input name="v" placeholder="Добавить пункт" autocomplete="off" enterkeyhint="done"></form></div></div>`;
-  return `<div class="top"><div class="nv"><button class="back" data-act="back" data-to="${t.area}">‹ ${A.name}</button>
+  const to = t.daily ? 'home' : t.area;
+  return `<div class="top"><div class="nv"><button class="back" data-act="back" data-to="${to}">‹ ${t.daily ? 'Главная' : A.name}</button>
       <span class="nvr"><button class="ed" data-act="edit" data-id="${t.id}">Изменить</button><button class="dots glass" data-act="more" data-id="${t.id}" aria-label="Ещё">${DOTS}</button></span></div></div>
     <div class="main">
-      <div class="tt tk${t.done ? ' done' : ''}"><div class="lbl">${lbl}</div><div class="tr"><span class="tck" data-act="done" data-id="${t.id}" role="checkbox" aria-checked="${!!t.done}" aria-label="Сделано"></span><h1>${esc(t.title)}</h1></div>${ring}</div><div class="gap"></div><div class="gap"></div>
+      <div class="tt tk${dn ? ' done' : ''}"><div class="lbl">${lbl}</div><div class="tr"><span class="tck" data-act="done" data-id="${t.id}" role="checkbox" aria-checked="${dn}" aria-label="Сделано"></span><h1>${esc(t.title)}</h1></div>${ring}</div><div class="gap"></div><div class="gap"></div>
       ${check}${info}${nudge}<div class="gap"></div><div class="gap"></div>${chk}
     </div>`;
 };
@@ -710,8 +730,10 @@ function parseWhen(s) {
   return { title: title || s.trim(), date, time };
 }
 
+const DAILY_RE = /(^|\s)(каждый день|ежедневно)(?=[\s,.!?]|$)/i;
 function openAdd(o) {
-  const p = parseWhen(o.text || '');
+  const daily = DAILY_RE.test(o.text || '');
+  const p = parseWhen((o.text || '').replace(DAILY_RE, ' '));
   const cal = o.mode === 'cal';
   let kind = o.kind || 'task';
   if (cal && /созвон|встреч|звонок|переговор/i.test(p.title)) kind = 'meeting';
@@ -719,7 +741,7 @@ function openAdd(o) {
   const date = p.date || (cal ? ui.cal : null);
   let start = p.time;
   if (kind !== 'task' && !start) { const h = Math.min(new Date().getHours() + 1, 22); start = `${pad(h)}:00`; }
-  sh = { mode: o.mode, kind, area, group: o.group || null, journal: o.journal || null, fixedArea: !!o.fixedArea };
+  sh = { mode: o.mode, kind, area, group: o.group || null, journal: o.journal || null, fixedArea: !!o.fixedArea, daily };
   sheet(`<form data-submit="add">
     <h3>${cal ? 'Добавить' : 'Новая задача'}</h3>
     <textarea class="in" name="title" rows="2" placeholder="Что нужно сделать" enterkeyhint="done">${esc(p.title)}</textarea>
@@ -742,11 +764,12 @@ function groupBlockSheet() {
     <input class="in" name="newgroup" placeholder="Название" style="margin-top:8px;display:${sh.group === '+' ? 'block' : 'none'}" autocomplete="off">`;
 }
 function whenBlock(date, time, hadTime) {
-  if (sh.kind === 'task') return dateRow('date', date, 'Срок') + dateRow('time', hadTime || '', 'Время', 'time');
+  if (sh.kind === 'task') return dateRow('date', sh.daily ? date || today() : date, sh.daily ? 'С какого дня' : 'Срок') + dateRow('time', hadTime || '', 'Время', 'time') + dailySwitch(sh.daily);
   const [h, mm] = (time || '10:00').split(':').map(Number);
   const end = `${pad(Math.min(h + 1, 23))}:${pad(mm)}`;
   return dateRow('date', date || ui.cal, 'День') + dateRow('time', time, 'Начало', 'time') + dateRow('end', end, 'Конец', 'time');
 }
+const dailySwitch = on => `<label class="row2"><span>Каждый день</span><input type="checkbox" class="sw" name="daily"${on ? ' checked' : ''} aria-label="Каждый день"></label>`;
 function openMove(t) {
   sh = { mode: 'move', id: t.id, kind: 'task', area: t.area, group: t.group };
   sheet(`<form data-submit="move"><h3>Перенести</h3><div data-slot="area">${areaBlock()}</div><div data-slot="group">${groupBlockSheet()}</div>
@@ -771,9 +794,10 @@ function confirmSheet(title, text, btn, act) {
 
 /* ---------- actions ---------- */
 function toggleDone(id) {
-  const t = Store.task(id), done = !t.done;
+  const t = Store.task(id), done = !isDone(t);
   if (done) ui.hop = Date.now(); // the rabbit hops on the next screen it appears on
-  Store.act('task_done', { ref: id, done });
+  if (t.daily) Store.act('daily_done', { ref: id, day: today(), done });
+  else Store.act('task_done', { ref: id, done });
   if (done) (rowOf(id) || Nav.cur?.el.querySelector(`.tck[data-id="${id}"]`))?.classList.add('pop');
 }
 // task card: «…» menu and «Изменить» sheet
@@ -783,7 +807,7 @@ function openMore(t) {
   const end = t.source?.kind === 'вручную' ? mrow('Удалить', 'del', t.id)
     : t.check && t.checkKind !== 'done' ? '' : mrow('Не задача<small>уберу в «Не стало задачами»</small>', 'mnot', t.id);
   sheet(`<div class="rows" style="margin-top:0">${mrow('Скопировать промпт<small>задача, нюансы и цитата — одним текстом</small>', 'mprompt', t.id)}
-    ${t.done ? '' : mrow(later ? 'Перенести на послезавтра' : 'Перенести на завтра', 'mlater', t.id)}
+    ${t.done || t.daily ? '' : mrow(later ? 'Перенести на послезавтра' : 'Перенести на завтра', 'mlater', t.id)}
     ${mrow(`Перенести в другую ${t.area === 'study' ? 'тему' : 'группу'}`, 'mmove', t.id)}${end}</div>
     <button class="btn-ghost" data-act="close" style="margin-top:6px">Отмена</button>`);
 }
@@ -793,6 +817,7 @@ function openEdit(t) {
     <textarea class="in" name="title" rows="2" placeholder="Что нужно сделать" enterkeyhint="done">${esc(t.title)}</textarea>
     <div class="lab">Пункты</div><div class="rows eits">${t.items.map((it, i) => `<div class="eit" data-i="${i}"><input class="ein" value="${esc(it.t)}" autocomplete="off" enterkeyhint="done" aria-label="Пункт"><button type="button" class="x" data-act="edrm" aria-label="Удалить пункт">✕</button></div>`).join('')}
       <div class="eit"><input class="ein" name="newitem" placeholder="＋ Добавить пункт" autocomplete="off" enterkeyhint="done"></div></div>
+    <div class="rows">${dailySwitch(t.daily)}</div>
     <button class="btn-main" type="submit">Сохранить</button></form>`);
 }
 const A = {
@@ -929,13 +954,16 @@ const SUBMIT = {
     if (!title) { f.title.focus(); return; }
     const date = f.date?.value || null, time = f.time?.value || null;
     if (sh.kind === 'task') {
+      const daily = !!f.daily?.checked;
+      if (!sh.area && daily) sh.area = 'personal'; // it lives on Главная anyway
       if (!sh.area) { toast('Выберите, куда: работа, учёба или личное'); return; }
       let group = sh.group === '+' ? (f.newgroup.value.trim() || null) : sh.group;
       if (sh.area === 'personal') group = null;
-      const task = { area: sh.area, group, title, due: date, time: date ? time : null };
+      const task = daily ? { area: sh.area, group, title, daily: true, start: date || today(), time, due: null, days: [] }
+        : { area: sh.area, group, title, due: date, time: date ? time : null };
       if (sh.journal) Store.act('journal_to_task', { ref: sh.journal, task_id: Store.uid(), task });
       else Store.act('task_new', { task });
-      closeSheet(); toast(`Добавлено в «${AREAS[sh.area].name}»`);
+      closeSheet(); toast(daily ? 'Добавлено на Главную, каждый день' : `Добавлено в «${AREAS[sh.area].name}»`);
     } else {
       if (!date || !time) { toast('Укажите день и время'); return; }
       const end = f.end.value && f.end.value > time ? f.end.value : `${pad(Math.min(+time.slice(0, 2) + 1, 23))}:${time.slice(3)}`;
@@ -953,6 +981,11 @@ const SUBMIT = {
     for (let i = t.items.length - 1; i >= 0; i--) if (!keep.get(i)) Store.act('item_delete', { ref: t.id, i });
     [...keep].filter(([, v]) => v).sort((a, b) => a[0] - b[0]).forEach(([, v], j) => { if (t.items[j].t !== v) Store.act('item_text', { ref: t.id, i: j, text: v }); });
     const add = f.newitem.value.trim(); if (add) Store.act('item_add', { ref: t.id, text: add });
+    const daily = f.daily.checked;
+    if (daily !== !!t.daily) {
+      Store.act('task_daily', daily ? { ref: t.id, daily, start: today(), time: t.time } : { ref: t.id, daily, due: today(), time: t.time });
+      toast(daily ? 'Теперь на Главной, каждый день' : `Теперь обычная задача в «${AREAS[t.area].name}»`);
+    }
     closeSheet();
   },
   move: f => {
@@ -981,7 +1014,18 @@ document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.ma
 document.addEventListener('change', e => {
   const el = e.target;
   if (el.dataset.change === 'due') Store.act('task_due', { ref: el.dataset.id, due: el.value || null, time: Store.task(el.dataset.id).time });
-  if (el.dataset.change === 'time') { const t = Store.task(el.dataset.id); Store.act('task_due', { ref: t.id, due: t.due, time: el.value || null }); }
+  if (el.dataset.change === 'time') {
+    const t = Store.task(el.dataset.id);
+    if (t.daily) Store.act('task_daily', { ref: t.id, daily: true, start: t.start, time: el.value || null });
+    else Store.act('task_due', { ref: t.id, due: t.due, time: el.value || null });
+  }
+  // «Каждый день» in the add sheet: the date becomes the first day
+  if (el.name === 'daily' && el.form?.dataset.submit === 'add') {
+    sh.daily = el.checked;
+    const d = el.form.querySelector('[name="date"]'); if (!d) return;
+    d.closest('.row2').querySelector('span').textContent = el.checked ? 'С какого дня' : 'Срок';
+    if (el.checked && !d.value) { d.value = today(); d.closest('.row2').querySelector('[data-show]').textContent = fmtField('date', d.value); }
+  }
   if (el.dataset.kind) { const v = el.closest('.row2').querySelector('[data-show]'); if (v) v.textContent = fmtField(el.dataset.kind, el.value); }
 });
 document.addEventListener('input', e => {
