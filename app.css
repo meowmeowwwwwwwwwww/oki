@@ -4,7 +4,6 @@
   --line:rgba(17,19,23,.1); --lav:#C3C7F4; --ice:#BBD3F2; --lav2:#DCD6FA; --dot:#8E95E8;
   --sans:"Zen Kaku Gothic New",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
   --st:max(env(safe-area-inset-top),14px); --sb:max(env(safe-area-inset-bottom),14px);
-  --grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
@@ -14,7 +13,7 @@ input,textarea{font:inherit;color:inherit;-webkit-user-select:text;user-select:t
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 [data-go],[data-act]{cursor:pointer}
 
-/* background: drifting blobs + grain */
+/* background: drifting blobs (no grain: Даша chose clean glass, 2026-10-12) */
 #bg{position:fixed;inset:0;overflow:hidden;pointer-events:none}
 .blob{position:absolute;border-radius:50%;filter:blur(46px);animation:drift 14s ease-in-out infinite alternate;transition:left 1.2s ease,top 1.2s ease,right 1.2s ease}
 .b1{width:300px;height:300px;right:-120px;top:40px;background:var(--lav)}
@@ -24,18 +23,17 @@ body.r-home #bg .b1{width:330px;height:330px;right:auto;left:-90px;top:110px}
 body.r-home #bg .b2{left:auto;right:-110px;top:360px;width:300px;height:300px}
 body.r-home #bg .b3{right:auto;left:10px;width:380px;height:300px;bottom:-120px}
 @keyframes drift{to{transform:translate(30px,-24px) scale(1.08)}}
-.grain{position:fixed;inset:0;background:var(--grain);mix-blend-mode:multiply;pointer-events:none;z-index:90;opacity:.35}
 .glass{background:rgba(255,255,255,.42);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);
   border:1px solid rgba(255,255,255,.75);box-shadow:0 10px 30px rgba(60,66,120,.08)}
 
 /* screen frame */
 #view{position:fixed;top:0;bottom:0;left:0;right:0;margin:0 auto;max-width:480px;overflow:hidden}
 /* each screen is a layer: tab screens sit above the dock line, pushed screens cover everything */
-.pane{position:absolute;top:0;left:0;right:0;bottom:var(--dockh,0px);z-index:1;touch-action:pan-y pinch-zoom}
+.pane{position:absolute;top:0;left:0;right:0;bottom:var(--dockh,0px);z-index:1;touch-action:pan-y}
 .pane.full{bottom:0;z-index:3;isolation:isolate;box-shadow:-14px 0 40px rgba(60,66,120,.16)}
 .pc{position:absolute;inset:0;display:flex;flex-direction:column}
 .pbg{position:absolute;inset:0;overflow:hidden;background:var(--mist);pointer-events:none}
-#dock{position:absolute;left:0;right:0;bottom:0;z-index:2;touch-action:pan-y pinch-zoom}
+#dock{position:absolute;left:0;right:0;bottom:0;z-index:2;touch-action:pan-y}
 .top{flex:none;padding:calc(var(--st) + 2px) 24px 0}
 .main{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:0 24px 32px;
   -webkit-mask-image:linear-gradient(transparent,#000 10px,#000 calc(100% - 44px),transparent);mask-image:linear-gradient(transparent,#000 10px,#000 calc(100% - 44px),transparent)}
@@ -185,6 +183,22 @@ body.r-home #bg .b3{right:auto;left:10px;width:380px;height:300px;bottom:-120px}
 .nv{display:flex;justify-content:space-between;align-items:center;font-size:15px;min-height:36px;padding-top:4px}
 .nv .back{padding:6px 12px 6px 0;margin-left:-4px}
 .nv span.r{font-size:13px;color:var(--ink2)}
+/* task card, variant Б: round check by the title; «Изменить» and «…» in the corner */
+.nvr{display:flex;align-items:center;gap:10px}
+.nv .ed{font-size:15px;padding:6px 4px}
+.dots{width:36px;height:36px;border-radius:50%;display:grid;place-items:center}
+.dots .dt{width:18px;height:4px;fill:var(--ink)}
+.tk .lbl,.tk .rg{padding-left:46px}
+.tk .tr{display:flex;gap:14px;align-items:flex-start}
+.tck{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--ink);flex:none;margin-top:3px;position:relative;background:rgba(255,255,255,.35);transition:transform .14s cubic-bezier(.2,.8,.2,1),background-color .2s,box-shadow .3s}
+.tck::before{content:"";position:absolute;inset:-12px}
+.tk.done .tck{background:var(--ink);box-shadow:inset 0 0 0 6px #fff,0 0 22px rgba(110,116,220,.55)}
+.tk.done h1{color:var(--ink3);text-decoration:line-through;text-decoration-thickness:1.5px}
+.tck:active{transform:scale(.9)}
+.tck.pop{animation:pop .35s ease}
+.dots:active{transform:scale(.94)}
+.nv .ed:active{opacity:.55}
+.dots,.nv .ed{transition:transform .14s cubic-bezier(.2,.8,.2,1),opacity .14s}
 .tt{padding-top:12px}
 .tt h1{font-weight:300;font-size:34px;line-height:1.02;letter-spacing:-.04em;overflow-wrap:anywhere}
 .tt p{font-size:15px;color:var(--ink2);margin-top:8px;font-weight:300;line-height:1.4}
@@ -272,7 +286,7 @@ mark{background:rgba(195,199,244,.8);color:inherit;border-radius:3px;padding:0 1
 .onb p b{font-weight:500;color:var(--ink)}
 .onb .say{font-size:14px;color:var(--ink);margin-top:14px}
 .kin{width:100%;height:56px;border-radius:22px;display:flex;align-items:center;gap:8px;padding:0 8px 0 4px;margin-top:20px}
-.kin .in{flex:1;min-width:0;height:100%;border:0;outline:0;background:none;padding:0 14px;font:400 15px var(--mono);color:var(--ink)}
+.kin .in{flex:1;min-width:0;height:100%;border:0;outline:0;background:none;padding:0 14px;font:400 16px var(--mono);color:var(--ink)}
 .kin .in::placeholder{color:var(--ink3);font-family:var(--sans);font-weight:300;font-size:16px}
 .keybox{width:100%;font:500 17px/1.7 var(--mono);letter-spacing:.04em;word-spacing:.3em;text-align:center;padding:20px 18px;border-radius:22px;margin-top:18px;-webkit-user-select:all;user-select:all}
 .sheet .keybox{background:rgba(255,255,255,.75);border:1px solid rgba(17,19,23,.08)}
@@ -300,6 +314,13 @@ a.btn-main,a.btn-ghost{text-decoration:none}
 .sheet .opts .chip.on{background:var(--ink);border-color:var(--ink)}
 .sheet .rows{border-radius:18px;background:rgba(255,255,255,.6);border:1px solid rgba(17,19,23,.08);margin-top:16px}
 .sheet .btn-main{margin-top:22px}
+.sheet .eit{display:flex;align-items:center;gap:10px;padding:0 12px 0 16px;border-bottom:1px solid var(--line)}
+.sheet .eit:last-child{border:0}
+.sheet .ein{flex:1;min-width:0;height:48px;border:0;outline:0;background:none;font-size:16px;font-weight:300}
+.sheet .ein::placeholder{color:var(--ink3)}
+.sheet .eit .x{width:26px;height:26px;border-radius:50%;background:rgba(17,19,23,.08);display:grid;place-items:center;font-size:12px;color:var(--ink2);flex:none;position:relative}
+.sheet .eit .x::before{content:"";position:absolute;inset:-9px}
+.sheet .rows .row2[data-act]:active{background-color:rgba(17,19,23,.05)}
 .sheet .del{color:var(--ink2);font-size:14px;display:block;margin:14px auto 0;padding:8px}
 
 /* toast */
@@ -307,6 +328,9 @@ a.btn-main,a.btn-ghost{text-decoration:none}
   background:var(--ink);color:#fff;font-size:14px;padding:11px 18px;border-radius:22px;width:max-content;max-width:calc(100vw - 48px);text-align:center;line-height:1.35;pointer-events:none;transition:opacity .2s,transform .2s;
   box-shadow:0 10px 30px rgba(20,24,60,.3)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
+#toast.act{pointer-events:auto;display:flex;align-items:center;gap:14px;padding:7px 8px 7px 18px}
+#toast:not(.on){pointer-events:none}
+#toast button{height:32px;padding:0 14px;border-radius:16px;background:rgba(255,255,255,.16);color:#fff;font-size:14px}
 
 /* swipe a task: right = done (ink), left = actions (lavender → ink) */
 .swiping{position:relative;z-index:1}
@@ -329,7 +353,10 @@ a.btn-main,a.btn-ghost{text-decoration:none}
 @keyframes glow{25%{opacity:1;transform:scale(1.28)}}
 
 /* press feedback: answers the finger at once */
-button,.chip,.pill,[data-go],[data-act]{touch-action:manipulation}
+/* no pinch or double-tap zoom anywhere, like in other iPhone apps (Даша 2026-10-12) */
+#layer .dim{touch-action:none}
+button,.chip,.pill,[data-go],[data-act],input,textarea{touch-action:pan-x pan-y}
+.chips{touch-action:pan-x}
 .pill,.chip,.btn-main,.mic,.menu,.rep,.back,.ck{transition:transform .14s cubic-bezier(.2,.8,.2,1)}
 .pill:active,.chip:active,.btn-main:active,.mic:active,.menu:active,.rep:active{transform:scale(.96)}
 .ck:active{transform:scale(.88)}
@@ -346,7 +373,6 @@ button,.chip,.pill,[data-go],[data-act]{touch-action:manipulation}
    and paints it plain mist, so the page fades into that colour and needs no room for the home bar */
 html.short{--sb:10px}
 html.short #bg::after,html.short .pbg::after{content:"";position:absolute;left:0;right:0;bottom:0;height:120px;background:linear-gradient(rgba(233,235,240,0),#E9EBF0 85%)}
-html.short .grain{-webkit-mask-image:linear-gradient(#000 calc(100% - 90px),transparent);mask-image:linear-gradient(#000 calc(100% - 90px),transparent)}
 
 /* Telegram: chat lists (a task's round check = read / not read) and «Telegram отключился» on Главная (final.html «broken collection») */
 .row2.pick .ck{margin-top:0}
@@ -355,3 +381,6 @@ html.short .grain{-webkit-mask-image:linear-gradient(#000 calc(100% - 90px),tran
 .broke h1{font-weight:300;font-size:30px;line-height:1.12;letter-spacing:-.03em}
 .broke p{font-size:15px;color:var(--ink2);margin-top:10px;font-weight:300;line-height:1.45}
 .broke .btn-main{margin:22px auto 0;width:220px}
+
+/* keyboard open (motion.js): the screen ends at the keyboard, no room for the home bar is needed */
+html.kb{--sb:8px}

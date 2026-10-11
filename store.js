@@ -59,6 +59,7 @@ const Store = (() => {
     item_add(a) { task(a.ref).items.push({ t: a.text, done: false }); },
     item_done(a) { task(a.ref).items[a.i].done = a.done; },
     item_delete(a) { task(a.ref).items.splice(a.i, 1); },
+    item_text(a) { task(a.ref).items[a.i].t = a.text; },
     event_new(a) { state.events.push(Object.assign({ id: a.ref }, a.event)); },
     event_delete(a) { state.events = state.events.filter(e => e.id !== a.ref); },
     wait_got(a) { const w = state.waiting.find(w => w.id === a.ref); if (w) w.got = a.at; },

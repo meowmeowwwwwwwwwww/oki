@@ -220,7 +220,8 @@ function collapseRow(row) {
   return row.animate([{ height: h + 'px', opacity: 1, transform: `translateX(${x}px)` }, { height: '0px', paddingTop: 0, paddingBottom: 0, opacity: 0, borderWidth: 0, transform: `translateX(${x < 0 ? -W() : x}px)` }],
     { duration: 280, easing: EASE, fill: 'forwards' }).finished;
 }
-const armAt = () => Math.min(W() * .32, 130);
+// «Сделано» needs a long, deliberate pull: a quick flick while scrolling must not close a task (Даша 2026-10-12)
+const armAt = () => Math.min(W() * .42, 160);
 const SW = {
   row: {
     begin(s) {
@@ -240,7 +241,11 @@ const SW = {
     end(s, v) {
       const { row, bg } = s, x = s.off || 0;
       const reset = then => tween(x, 0, durFor(x, v), y => setRow(row, bg, y), () => { row.classList.remove('swiping'); bg.remove(); then?.(); });
-      if (x > 0) return reset(x > armAt() || (v > .6 && x > 40) ? () => toggleDone(row.dataset.tid) : null);
+      if (x > 0) return reset(x > armAt() ? () => {
+        const id = row.dataset.tid, was = Store.task(id).done;
+        toggleDone(id);
+        toast(was ? 'Возвращено в работу' : 'Сделано', { label: 'Вернуть', fn: () => toggleDone(id) });
+      } : null);
       if (x < -ACTW / 2 || (v < -.4 && x < -30)) { Swipe.open = { row, bg }; tween(x, -ACTW, durFor(x + ACTW, v), y => setRow(row, bg, y)); }
       else reset();
     },
@@ -315,6 +320,8 @@ const SW = {
 
 /* ---------- pointer tracking ---------- */
 let G = null, eatClick = false;
+// a new touch anywhere (a toast button, a sheet) starts clean: the click after a swipe is eaten only once
+window.addEventListener('pointerdown', () => { eatClick = false; }, true);
 view.addEventListener('pointerdown', e => {
   eatClick = false;
   G = null; // a lost release must never block the next touch
@@ -335,6 +342,8 @@ window.addEventListener('pointermove', e => {
   if (!s.mode) {
     if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
     if (Math.abs(dx) < Math.abs(dy) * 1.2) { G = null; return; }
+    // a task row moves only for a clearly sideways finger, not for a slanted scroll
+    if (s.row && isTab(Nav.cur.r.name) && (Math.abs(dx) < Math.abs(dy) * 2 || Math.abs(dx) < 16)) { if (Math.abs(dx) >= 16 || Math.abs(dy) >= 16) G = null; return; }
     const full = !isTab(Nav.cur.r.name);
     if (full) {
       const canBack = Nav.stack.length > 1 || Nav.cur.el.querySelector('.back[data-to]');
@@ -360,6 +369,8 @@ window.addEventListener('pointercancel', e => release(e, true));
 document.addEventListener('click', e => { if (eatClick) { eatClick = false; e.stopPropagation(); e.preventDefault(); } }, true);
 // iOS shows :active press states only when the page listens to touches
 document.addEventListener('touchstart', () => {}, { passive: true });
+// no pinch zoom (Safari ignores user-scalable=no; the iPhone shell respects it)
+['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
 
 /* ---------- sheet: drag down to close ---------- */
 let SG = null;
@@ -409,6 +420,26 @@ function fitScreen() {
 }
 fitScreen();
 addEventListener('resize', fitScreen);
+
+/* ---------- keyboard ---------- */
+// iPhone lays the keyboard over the page and slides the page up under the clock. Instead, the screen
+// and sheets shrink to the part left above the keyboard: the field and «Добавить» sit right on top of it.
+const VV = window.visualViewport;
+function fitKeyboard() {
+  const open = VV.height < innerHeight - 120 && !!document.activeElement?.matches('input,textarea');
+  document.documentElement.classList.toggle('kb', open);
+  [view, layer()].forEach(el => {
+    el.style.top = open ? VV.offsetTop + 'px' : '';
+    el.style.height = open ? VV.height + 'px' : '';
+    el.style.bottom = open ? 'auto' : '';
+  });
+  if (!open && (scrollY || scrollX)) scrollTo(0, 0);
+}
+if (VV) {
+  VV.addEventListener('resize', fitKeyboard);
+  VV.addEventListener('scroll', fitKeyboard);
+  document.addEventListener('focusout', () => setTimeout(fitKeyboard, 60));
+}
 
 /* ---------- start ---------- */
 window.addEventListener('hashchange', apply);

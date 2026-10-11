@@ -85,6 +85,7 @@ function RABBIT(mood = 'calm', cls = '', float = false) {
 const MIC = '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg>';
 const COPY = '<svg class="copy" viewBox="0 0 16 16"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>';
 const DOC = '<svg viewBox="0 0 16 16"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13M6.5 8.5h4M6.5 11h4"/></svg>';
+const DOTS = '<svg class="dt" viewBox="0 0 18 4"><circle cx="2" cy="2" r="1.7"/><circle cx="9" cy="2" r="1.7"/><circle cx="16" cy="2" r="1.7"/></svg>';
 const LOUPE = '<svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="6"/><path d="M13.5 13.5 18 18"/></svg>';
 const BELL = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>';
 function RING(p) {
@@ -315,7 +316,8 @@ SCREENS.task = r => {
   if (!t) return null;
   const A = AREAS[t.area];
   const n = t.items.length, k = t.items.filter(i => i.done).length, next = t.items.find(i => !i.done);
-  const lbl = t.done ? `сделано ${dayWord(t.doneAt)}` : t.due ? inDays(t.due) : 'без срока';
+  // variant Б (Даша 2026-10-12): the round check sits by the title, rare actions live in «…»
+  const lbl = [t.group || A.name, t.done && t.doneAt ? `сделано ${dayWord(t.doneAt)}` : ''].filter(Boolean).map(esc).join(' · ');
   const ring = t.big ? `<div class="rg"><span>${RING(n ? k / n : 0)}${next ? 'Дальше: ' + esc(next.t) : 'Все пункты готовы'}</span><span>${k} из ${n}</span></div>` : '';
   const check = !t.check ? '' : t.checkKind === 'done' ? `<div class="check"><b>${t.checkHow === 'cancel' ? 'Похоже, уже не нужно' : 'Похоже, уже сделано'}</b><p>${esc((t.checkWhy || '').replace(/^Похоже[^:]*:\s*/, 'В переписке: '))}</p>
     <div class="acts"><button class="pill w" data-act="shut" data-id="${t.id}">Закрыть задачу</button><button class="pill" data-act="confirm" data-id="${t.id}">Ещё нет</button></div></div><div class="gap"></div><div class="gap"></div>`
@@ -323,7 +325,7 @@ SCREENS.task = r => {
     <div class="acts"><button class="pill w" data-act="confirm" data-id="${t.id}">Да, задача</button><button class="pill" data-act="not" data-id="${t.id}">Не задача</button></div></div><div class="gap"></div><div class="gap"></div>`;
   const src = t.source || {};
   const info = `<div class="card glass">
-    <div class="row2 chev"><span>Срок</span><span class="v strong">${t.due ? long(t.due) : '<span class="pill dark">Поставить срок</span>'}</span>
+    <div class="row2 chev"><span>Срок</span><span class="v">${t.due ? short(t.due) + (t.done ? '' : ' · ' + inDays(t.due)) : '<span class="pill dark">Поставить срок</span>'}</span>
       <input class="over" type="date" value="${t.due || ''}" data-change="due" data-id="${t.id}" aria-label="Срок"></div>
     ${t.due ? `<div class="row2 chev"><span>Время</span><span class="v">${t.time || 'не указано'}</span><input class="over" type="time" value="${t.time || ''}" data-change="time" data-id="${t.id}" aria-label="Время"></div>` : ''}
     ${t.from ? `<div class="row2"><span>От кого</span><span class="v">${esc(t.from)}</span></div>` : ''}
@@ -333,16 +335,11 @@ SCREENS.task = r => {
   const chk = `<div class="chk glass"><div class="subs">${n ? `<div class="cnt">${k} из ${n}</div>` : ''}${t.items.map((it, i) =>
     `<div class="si${it.done ? ' ok' : ''}" data-act="item" data-id="${t.id}" data-i="${i}"><i></i>${esc(it.t)}</div>`).join('')}
     <form class="add" data-submit="item" data-id="${t.id}"><i></i><input name="v" placeholder="Добавить пункт" autocomplete="off" enterkeyhint="done"></form></div></div>`;
-  return `<div class="top"><div class="nv"><button class="back" data-act="back" data-to="${t.area}">‹ ${A.name}</button><span class="r">${esc(t.group || '')}</span></div></div>
+  return `<div class="top"><div class="nv"><button class="back" data-act="back" data-to="${t.area}">‹ ${A.name}</button>
+      <span class="nvr"><button class="ed" data-act="edit" data-id="${t.id}">Изменить</button><button class="dots glass" data-act="more" data-id="${t.id}" aria-label="Ещё">${DOTS}</button></span></div></div>
     <div class="main">
-      <div class="tt"><div class="lbl">${lbl}</div><h1>${esc(t.title)}</h1>${ring}</div><div class="gap"></div><div class="gap"></div>
-      ${check}${info}${nudge}<div class="gap"></div><div class="gap"></div>${chk}<div class="gap"></div><div class="gap"></div>
-      <div class="acts"><button class="pill ${t.done ? '' : 'dark'}" data-act="done" data-id="${t.id}">${t.done ? 'Вернуть в работу' : 'Сделано'}</button>
-        <button class="pill" data-act="move" data-id="${t.id}">Перенести в другую ${t.area === 'study' ? 'тему' : 'группу'}</button>
-        ${src.kind === 'вручную' ? `<button class="pill" data-act="del" data-id="${t.id}">Удалить</button>` : t.check && t.checkKind !== 'done' ? '' : `<button class="pill" data-act="not" data-id="${t.id}">Не задача</button>`}</div>
-      <div style="height:34px"></div>
-      <button class="btn-main" data-act="prompt" data-id="${t.id}">${COPY}Скопировать промпт</button>
-      <p class="note">Задача, нюансы и цитата — одним текстом</p>
+      <div class="tt tk${t.done ? ' done' : ''}"><div class="lbl">${lbl}</div><div class="tr"><span class="tck" data-act="done" data-id="${t.id}" role="checkbox" aria-checked="${!!t.done}" aria-label="Сделано"></span><h1>${esc(t.title)}</h1></div>${ring}</div><div class="gap"></div><div class="gap"></div>
+      ${check}${info}${nudge}<div class="gap"></div><div class="gap"></div>${chk}
     </div>`;
 };
 
@@ -666,7 +663,13 @@ function closeSheet() {
   setTimeout(() => { if (!L.classList.contains('on')) L.innerHTML = ''; }, 330);
 }
 let tt;
-function toast(msg) { const T = $('#toast'); T.textContent = msg; T.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => T.classList.remove('on'), Math.max(2200, msg.length * 60)); }
+// toast(msg) or toast(msg, { label, fn }): with a button it stays longer so there is time to press it
+function toast(msg, act) {
+  const T = $('#toast');
+  T.textContent = msg; T.classList.toggle('act', !!act);
+  if (act) { const b = document.createElement('button'); b.type = 'button'; b.textContent = act.label; b.onclick = () => { T.classList.remove('on'); act.fn(); }; T.append(b); }
+  T.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => T.classList.remove('on'), act ? 4000 : Math.max(2200, msg.length * 60));
+}
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch (e) {
     const a = document.createElement('textarea'); a.value = text; a.style.position = 'fixed'; a.style.opacity = '0'; document.body.append(a); a.select();
@@ -764,7 +767,26 @@ function toggleDone(id) {
   const t = Store.task(id), done = !t.done;
   if (done) ui.hop = Date.now(); // the rabbit hops on the next screen it appears on
   Store.act('task_done', { ref: id, done });
-  if (done) rowOf(id)?.classList.add('pop');
+  if (done) (rowOf(id) || Nav.cur?.el.querySelector(`.tck[data-id="${id}"]`))?.classList.add('pop');
+}
+// task card: «…» menu and «Изменить» sheet
+const mrow = (t, act, id) => `<div class="row2" data-act="${act}" data-id="${id}"><div class="t">${t}</div></div>`;
+function openMore(t) {
+  const tm = addDays(today(), 1), later = t.due === tm;
+  const end = t.source?.kind === 'вручную' ? mrow('Удалить', 'del', t.id)
+    : t.check && t.checkKind !== 'done' ? '' : mrow('Не задача<small>уберу в «Не стало задачами»</small>', 'mnot', t.id);
+  sheet(`<div class="rows" style="margin-top:0">${mrow('Скопировать промпт<small>задача, нюансы и цитата — одним текстом</small>', 'mprompt', t.id)}
+    ${t.done ? '' : mrow(later ? 'Перенести на послезавтра' : 'Перенести на завтра', 'mlater', t.id)}
+    ${mrow(`Перенести в другую ${t.area === 'study' ? 'тему' : 'группу'}`, 'mmove', t.id)}${end}</div>
+    <button class="btn-ghost" data-act="close" style="margin-top:6px">Отмена</button>`);
+}
+function openEdit(t) {
+  sh = { mode: 'edit', id: t.id };
+  sheet(`<form data-submit="edit"><h3>Изменить</h3>
+    <textarea class="in" name="title" rows="2" placeholder="Что нужно сделать" enterkeyhint="done">${esc(t.title)}</textarea>
+    <div class="lab">Пункты</div><div class="rows eits">${t.items.map((it, i) => `<div class="eit" data-i="${i}"><input class="ein" value="${esc(it.t)}" autocomplete="off" enterkeyhint="done" aria-label="Пункт"><button type="button" class="x" data-act="edrm" aria-label="Удалить пункт">✕</button></div>`).join('')}
+      <div class="eit"><input class="ein" name="newitem" placeholder="＋ Добавить пункт" autocomplete="off" enterkeyhint="done"></div></div>
+    <button class="btn-main" type="submit">Сохранить</button></form>`);
 }
 const A = {
   close: closeSheet,
@@ -781,6 +803,16 @@ const A = {
   shut: el => { const t = Store.task(el.dataset.id); toggleDone(t.id); toast('Задача закрыта'); back(t.area); },
   not: el => { const t = Store.task(el.dataset.id); Store.act('task_not', { ref: t.id }); toast('Убрано в «Не стало задачами»'); back(t.area); },
   move: el => openMove(Store.task(el.dataset.id)),
+  more: el => openMore(Store.task(el.dataset.id)),
+  edit: el => openEdit(Store.task(el.dataset.id)),
+  edrm: el => el.closest('.eit').remove(),
+  mprompt: async el => { closeSheet(); await A.prompt(el); },
+  mlater: el => {
+    const t = Store.task(el.dataset.id), d = addDays(today(), t.due === addDays(today(), 1) ? 2 : 1);
+    closeSheet(); Store.act('task_due', { ref: t.id, due: d, time: t.time }); toast(`Перенесено на ${dayWord(d)}`);
+  },
+  mmove: el => { const t = Store.task(el.dataset.id); closeSheet(); setTimeout(() => openMove(t), 260); },
+  mnot: el => { closeSheet(); A.not(el); },
   del: el => { sh = { del: el.dataset.id }; confirmSheet('Удалить задачу?', 'Она исчезнет совсем, в архиве её не будет.', 'Удалить', 'del-ok'); },
   'del-ok': () => {
     const t = Store.task(sh.del), row = rowOf(t.id); closeSheet();
@@ -912,6 +944,17 @@ const SUBMIT = {
       ui.cal = date; ui.month = date.slice(0, 7);
       closeSheet(); toast('Добавлено в календарь');
     }
+  },
+  edit: f => {
+    const t = Store.task(sh.id), title = f.title.value.trim().replace(/\s+/g, ' ');
+    if (!title) { f.title.focus(); return; }
+    if (title !== t.title) Store.act('task_title', { ref: t.id, title });
+    const keep = new Map([...f.querySelectorAll('.eit[data-i]')].map(r => [+r.dataset.i, r.querySelector('input').value.trim().replace(/\s+/g, ' ')]));
+    // delete from the end so the other numbers stay put, then rename what is left
+    for (let i = t.items.length - 1; i >= 0; i--) if (!keep.get(i)) Store.act('item_delete', { ref: t.id, i });
+    [...keep].filter(([, v]) => v).sort((a, b) => a[0] - b[0]).forEach(([, v], j) => { if (t.items[j].t !== v) Store.act('item_text', { ref: t.id, i: j, text: v }); });
+    const add = f.newitem.value.trim(); if (add) Store.act('item_add', { ref: t.id, text: add });
+    closeSheet();
   },
   move: f => {
     let group = sh.group === '+' ? (f.newgroup.value.trim() || null) : sh.group;
