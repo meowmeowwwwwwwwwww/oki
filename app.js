@@ -1,0 +1,801 @@
+'use strict';
+// Oki — screens. Built 1:1 from design/04-style/final.html (approved 2026-10-11).
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const S = () => Store.s;
+
+/* ---------- dates ---------- */
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const pd = s => { const [y, m, d] = s.slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); };
+const today = () => iso(new Date());
+const addDays = (s, n) => { const d = pd(s); d.setDate(d.getDate() + n); return iso(d); };
+const diff = (a, b) => Math.round((pd(a) - pd(b)) / 864e5);
+const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const mins = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
+const WD = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const WDF = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+const MON = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const MONG = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const MONN = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+const plural = (n, f) => f[(n % 10 === 1 && n % 100 !== 11) ? 0 : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 1 : 2];
+const N = (n, f) => `${n} ${plural(n, f)}`;
+const short = s => { const d = pd(s); return `${WD[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}`; };
+const dayMon = s => { const d = pd(s); return `${d.getDate()} ${MON[d.getMonth()]}`; };
+const long = s => { const d = pd(s); return `${WDF[d.getDay()]}, ${d.getDate()} ${MONG[d.getMonth()]}`; };
+function dayWord(s) {
+  const n = diff(s, today());
+  if (n === 0) return 'сегодня'; if (n === 1) return 'завтра'; if (n === -1) return 'вчера'; if (n === 2) return 'послезавтра';
+  return short(s);
+}
+const dueText = t => t.due ? dayWord(t.due) + (t.time ? `, ${t.time}` : '') : 'без срока';
+function inDays(s) {
+  const n = diff(s, today());
+  if (n === 0) return 'сегодня'; if (n === 1) return 'завтра';
+  if (n > 0) return `через ${N(n, ['день', 'дня', 'дней'])}`;
+  return n === -1 ? 'срок был вчера' : `срок был ${N(-n, ['день', 'дня', 'дней'])} назад`;
+}
+function weekStart(s) { const d = pd(s); return addDays(s, -((d.getDay() + 6) % 7)); }
+
+/* ---------- words ---------- */
+const AREAS = {
+  work: { name: 'Работа', low: 'работа', by: 'по работе', ph: 'Задача в «Работу»…', grp: 'Группа' },
+  study: { name: 'Учёба', low: 'учёба', by: 'по учёбе', ph: 'Задача в «Учёбу»…', grp: 'Предмет' },
+  personal: { name: 'Личное', low: 'личное', by: 'по личным делам', ph: 'Задача в «Личное»…' },
+};
+const KIN = ['мама', 'папа', 'бабушка', 'дедушка', 'брат', 'сестра', 'бухгалтер'];
+// «от Ани», «от Марка», «от мамы» — simple genitive for names and roles
+function gen(name) {
+  return String(name).split(' ').map(w => {
+    let r = w;
+    if (/[гкхжшщч]а$/i.test(w)) r = w.slice(0, -1) + 'и';
+    else if (/а$/i.test(w)) r = w.slice(0, -1) + 'ы';
+    else if (/я$/i.test(w)) r = w.slice(0, -1) + 'и';
+    else if (/[йь]$/i.test(w)) r = w.slice(0, -1) + 'я';
+    else if (/[бвгджзклмнпрстфхцчшщ]$/i.test(w)) r = w + 'а';
+    return KIN.includes(w.toLowerCase()) ? r.toLowerCase() : r;
+  }).join(' ');
+}
+const srcWord = k => k === 'заметки' ? 'из заметок' : k === 'вручную' ? '' : k;
+
+/* ---------- rabbit (moods: ears + eyes + glow together) ---------- */
+const MOOD = {
+  happy: { l: 10, r: -12, fill: 'aFillWarm', aura: '#D2A6F0', ao: 1 },
+  calm: { l: 0, r: 0, fill: 'aFill', aura: '#A9AEF0', ao: .85 },
+  sad: { l: -88, r: 88, fill: 'aFillGrey', aura: '#B4B8C4', ao: .45 },
+};
+function RABBIT(mood = 'calm', cls = '', float = false) {
+  const m = MOOD[mood];
+  const shapes = `<g transform="rotate(${m.l} 84 116)"><ellipse cx="74" cy="66" rx="17" ry="56" transform="rotate(-14 74 66)"/></g>
+    <g transform="rotate(${m.r} 120 118)"><ellipse cx="128" cy="70" rx="17" ry="54" transform="rotate(18 128 70)"/></g>
+    <ellipse cx="100" cy="140" rx="56" ry="46"/><ellipse cx="100" cy="206" rx="46" ry="40"/>`;
+  const eyes = mood === 'happy'
+    ? `<g fill="none" stroke="#111317" stroke-width="4.5" stroke-linecap="round"><path d="M72 146 Q80 133 88 146"/><path d="M112 146 Q120 133 128 146"/></g>`
+    : mood === 'sad'
+      ? `<g class="eyes" fill="#111317"><ellipse cx="81" cy="149" rx="5" ry="7"/><ellipse cx="119" cy="149" rx="5" ry="7"/></g>`
+      : `<g class="eyes" fill="#111317"><ellipse cx="80" cy="140" rx="5.5" ry="9"/><ellipse cx="120" cy="140" rx="5.5" ry="9"/></g>`;
+  const body = `<g class="au" fill="${m.aura}" filter="url(#aura)" opacity="${m.ao}">${shapes}</g><g fill="url(#${m.fill})" filter="url(#soft)">${shapes}</g>${eyes}`;
+  return `<svg class="${cls}" viewBox="-30 -10 260 290" aria-hidden="true">${float ? `<g class="float">${body}</g>` : body}</svg>`;
+}
+
+/* ---------- icons ---------- */
+const MIC = '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg>';
+const COPY = '<svg class="copy" viewBox="0 0 16 16"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>';
+const DOC = '<svg viewBox="0 0 16 16"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13M6.5 8.5h4M6.5 11h4"/></svg>';
+const LOUPE = '<svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="6"/><path d="M13.5 13.5 18 18"/></svg>';
+const BELL = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>';
+function RING(p) {
+  const r = 12, L = 2 * Math.PI * r;
+  return `<svg class="ring" viewBox="0 0 28 28"><circle cx="14" cy="14" r="${r}" stroke="rgba(17,19,23,.14)"/><circle cx="14" cy="14" r="${r}" stroke="#111317" stroke-dasharray="${(L * p).toFixed(1)} ${L.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 14 14)"/></svg>`;
+}
+
+/* ---------- selectors ---------- */
+const live = () => S().tasks.filter(t => !t.notTask);
+const open = () => live().filter(t => !t.done);
+const overdue = t => !t.done && t.due && t.due < today();
+const dueToday = t => !t.done && t.due && t.due <= today();
+// done tasks stay in lists until the end of the next day, then live in the archive
+const shown = t => !t.notTask && (!t.done || (t.doneAt && diff(today(), t.doneAt) <= 1));
+const doneToday = () => live().filter(t => t.done && t.doneAt && t.doneAt.slice(0, 10) === today()).length;
+function mood(list, sadAt) {
+  const late = list.filter(overdue).length;
+  if (late >= sadAt) return 'sad';
+  if (doneToday() >= 3) return 'happy';
+  return 'calm';
+}
+const dayEvents = d => S().events.filter(e => e.date === d).sort((a, b) => a.start.localeCompare(b.start));
+function clashes(list) {
+  const c = new Set();
+  list.forEach(a => list.forEach(b => { if (a !== b && a.start < b.end && b.start < a.end) { c.add(a.id); c.add(b.id); } }));
+  return c;
+}
+
+/* ---------- ui state ---------- */
+const ui = { chip: { work: 'all', study: 'all' }, open: {}, cal: today(), month: today().slice(0, 7), q: '', arch: 'all', per: 'week', scroll: {} };
+
+/* ---------- pieces ---------- */
+const grp = (n, c, cls = '') => `<div class="grp ${cls}">${esc(n)}<span>${c}</span></div>`;
+const tabs = cur => `<nav class="tabs">${[['home', 'Главная'], ['work', 'Работа'], ['study', 'Учёба'], ['personal', 'Личное'], ['cal', 'Календарь']]
+  .map(([k, n]) => `<button type="button" data-go="${k}" class="${k === cur ? 'on' : ''}">${n}</button>`).join('')}<i class="ind"></i></nav>`;
+const dock = (cur, ph) => `<div class="dock"><form class="inp" data-submit="quick">
+  <label class="field glass"><input name="q" placeholder="${ph}" autocomplete="off" enterkeyhint="done"></label>
+  <button type="button" class="mic" data-act="mic" aria-label="Голосом">${MIC}</button></form>${tabs(cur)}</div>`;
+
+function meta(t, o = {}) {
+  const p = [];
+  if (t.check) p.push('<span class="q">проверьте</span>');
+  if (t.done) p.push(t.doneAt ? `сделано ${dayWord(t.doneAt)}` : 'сделано');
+  else if (overdue(t)) p.push(`<span class="ov">срок был ${dayWord(t.due)}</span>`);
+  else if (t.due === today()) p.push(`<span class="now">${dueText(t)}</span>`);
+  else p.push(dueText(t));
+  if (o.group && t.group) p.push(esc(t.group));
+  if (o.area) p.push(AREAS[t.area].low);
+  if (t.from) p.push('от ' + esc(gen(t.from)));
+  const s = srcWord(t.source?.kind); if (s && !o.noSrc) p.push(s);
+  // status (glowing «сегодня», «срок был…») stands alone, the rest reads «от Ани · почта»
+  const lead = p.filter(x => x.startsWith('<')), rest = p.filter(x => !x.startsWith('<'));
+  return lead.join('') + (rest.length ? `<span>${rest.join(' · ')}</span>` : '');
+}
+function subLine(t) {
+  const n = t.items.length; if (!n) return '';
+  const k = t.items.filter(i => i.done).length;
+  if (!ui.open[t.id]) return `<div class="sub" data-act="fold" data-id="${t.id}">${k} из ${n} ${n % 10 === 1 && n % 100 !== 11 ? 'пункта' : 'пунктов'}</div>`;
+  return `<div class="subs"><div class="cnt" data-act="fold" data-id="${t.id}">${k} из ${n}</div>${t.items.map((it, i) =>
+    `<div class="si${it.done ? ' ok' : ''}" data-act="item" data-id="${t.id}" data-i="${i}"><i></i>${esc(it.t)}</div>`).join('')}</div>`;
+}
+const taskRow = (t, o) => `<div class="task${t.done ? ' done' : ''}" data-go="task/${t.id}" data-tid="${t.id}"><span class="ck" data-act="done" data-id="${t.id}" role="checkbox" aria-checked="${!!t.done}"></span>
+  <div class="body"><div class="t">${esc(t.title)}</div><div class="m">${meta(t, o)}</div>${subLine(t)}</div></div>`;
+function bigCard(t) {
+  const n = t.items.length || 1, k = t.items.filter(i => i.done).length, next = t.items.find(i => !i.done);
+  const m = [t.due ? (overdue(t) ? `<span class="ov">срок был ${dayWord(t.due)}</span>` : `<span>${short(t.due)} · ${inDays(t.due)}</span>`) : '<span>без срока</span>'];
+  if (t.from) m.push(`<span>от ${esc(gen(t.from))}</span>`);
+  return `<div class="big glass" data-go="task/${t.id}" data-bid="${t.id}"><div class="r1">${RING(k / n)}<div><div class="t">${esc(t.title)}</div><div class="m">${m.join('')}</div></div></div>
+    <div class="ft"><span>${next ? `Дальше: <b>${esc(next.t)}</b>` : t.done ? 'Сделано' : 'Все пункты готовы'}</span><span>${k} из ${t.items.length}</span></div></div>`;
+}
+const sortTasks = l => l.slice().sort((a, b) => (a.done - b.done) || ((a.due || '9') + (a.time || '99')).localeCompare((b.due || '9') + (b.time || '99')));
+function groupBlock(name, list, o = {}) {
+  const bigs = list.filter(t => t.big && !t.done), rest = sortTasks(list.filter(t => !(t.big && !t.done)));
+  return grp(name, list.filter(t => !t.done).length || '', o.cls) + bigs.map(bigCard).join('<div class="gap"></div>')
+    + (bigs.length && rest.length ? '<div class="gap"></div>' : '') + (rest.length ? `<div class="card glass">${rest.map(t => taskRow(t, o)).join('')}</div>` : '');
+}
+
+/* ---------- screens ---------- */
+const SCREENS = {};
+
+SCREENS.onboard = () => `<div class="onb">
+  <span class="logo" style="font-size:34px">Oki</span>
+  <div class="rb">${RABBIT('calm', '', true)}</div>
+  <h1>Здравствуйте, ${esc(S().settings.name)}.<br>Я Oki.</h1>
+  <p>Собираю Ваши задачи из сообщений и записей. Вам останется только отмечать сделанное.</p>
+  <div class="bt"><button class="btn-main" data-act="onb-bell">${BELL}Разрешить уведомления</button><button class="btn-ghost" style="margin-top:8px" data-act="onb-later">Позже</button></div>
+</div>`;
+
+SCREENS.home = () => {
+  const t = today(), o = open();
+  const cnt = a => o.filter(x => x.area === a && dueToday(x)).length;
+  const c = { work: cnt('work'), study: cnt('study'), personal: cnt('personal') };
+  const parts = Object.keys(c).filter(k => c[k]).map(k => [c[k], AREAS[k].by]);
+  let line = 'На сегодня задач нет.';
+  if (parts.length) {
+    const s = parts.map(([n, by], i) => i === 0 ? `${N(n, ['задача', 'задачи', 'задач'])} ${by}` : `${n} ${by}`);
+    line = 'У Вас ' + (s.length > 1 ? s.slice(0, -1).join(', ') + ' и ' + s.at(-1) : s[0]) + '.';
+  }
+  const h = new Date().getHours();
+  const hi = h < 5 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер';
+  const name = esc(S().settings.name);
+  const saved = S().savedAt ? S().savedAt.slice(11, 16) : '';
+  return `<div class="top"><div class="hhd"><span class="logo" style="font-size:26px;letter-spacing:-.04em">Oki</span>
+      <span class="r">${saved ? `<span class="st"><i></i>сохранено ${saved}</span>` : ''}<button class="menu glass" data-go="more" aria-label="Ещё"><i></i></button></span></div></div>
+    <div class="home-main">
+      <div class="stage">${RABBIT(mood(live(), 2), '', true)}</div>
+      <div class="greet"><h1>${hi},<br><span class="g" data-t="${name}">${name}</span></h1><p>${line}</p></div>
+      <div class="hchips">${['work', 'study', 'personal'].map(a => `<div class="chip glass" data-go="${a}">${AREAS[a].low} <span>${c[a] || '—'}</span></div>`).join('')}</div>
+      ${nearCard()}
+    </div>`;
+};
+function nearCard() {
+  const t = today(), now = nowHM();
+  const evs = [...dayEvents(t).filter(e => e.end > now), ...dayEvents(addDays(t, 1))];
+  const e = evs[0];
+  if (e) {
+    const sameDay = dayEvents(e.date), cl = sameDay.find(x => x !== e && x.start < e.end && e.start < x.end);
+    let when;
+    if (e.date !== t) when = 'завтра';
+    else if (e.start <= now) when = 'идёт сейчас';
+    else { const m = mins(e.start) - mins(now); when = m < 60 ? `через ${m} мин` : `через ${N(Math.round(m / 60), ['час', 'часа', 'часов'])}`; }
+    return `<div class="near glass" data-act="near" data-d="${e.date}"><div class="r"><span>Ближайшее</span><span>${when}</span></div>
+      <h2>${esc(e.title)}</h2><div class="s">${e.start}–${e.end} · ${esc(e.group || AREAS[e.area]?.low || '')}</div>
+      ${cl ? `<div class="warn"><i></i>накладка: в ${cl.start} ещё «${esc(cl.title)}»</div>` : ''}</div>`;
+  }
+  const d = sortTasks(open().filter(x => x.due && x.due >= t))[0];
+  if (!d) return '';
+  return `<div class="near glass" data-go="task/${d.id}"><div class="r"><span>Ближайший срок</span><span>${dueText(d)}</span></div>
+    <h2>${esc(d.title)}</h2><div class="s">${esc(d.group || AREAS[d.area].low)}</div></div>`;
+}
+
+function areaScreen(area) {
+  const A = AREAS[area];
+  const all = S().tasks.filter(t => t.area === area && shown(t));
+  const op = all.filter(t => !t.done);
+  const late = op.filter(overdue);
+  const tdy = op.filter(t => t.due === today());
+  const now = nowHM();
+  const hot = tdy.filter(t => t.time && t.time > now && mins(t.time) - mins(now) <= 360).length;
+  let say = [];
+  if (late.length) say.push(`${late.length} ${plural(late.length, ['просрочена', 'просрочены', 'просрочено'])}`);
+  if (tdy.length) say.push(`${tdy.length} сегодня`);
+  if (hot) say.push(hot === 1 ? 'одна горит' : `${hot} горят`);
+  if (!say.length) { const nx = sortTasks(op.filter(t => t.due))[0]; say.push(nx ? `Ближайший срок — ${dueText(nx)}` : op.length ? 'Сроков нет' : 'Всё сделано'); }
+  say = say.join(', ').replace(/^./, c => c.toUpperCase()) + '.';
+
+  let body = '', chips = '';
+  if (area === 'personal') {
+    const lateL = all.filter(overdue);
+    const b = { 'Сегодня': [], 'На неделе': [], 'Позже': [], 'Без срока': [] };
+    all.filter(t => !overdue(t)).forEach(t => {
+      const d = t.done ? today() : t.due;
+      if (!d) b['Без срока'].push(t); else { const n = diff(d, today()); b[n <= 0 ? 'Сегодня' : n <= 7 ? 'На неделе' : 'Позже'].push(t); }
+    });
+    if (lateL.length) body += groupBlock('Просрочено', lateL, { cls: 'late' });
+    Object.entries(b).forEach(([k, l]) => { if (l.length) body += groupBlock(k, l); });
+  } else {
+    const groups = {};
+    all.forEach(t => (groups[t.group || 'Новые'] ||= []).push(t));
+    const key = l => l.filter(t => !t.done && t.due).map(t => t.due).sort()[0] || '9';
+    const names = Object.keys(groups).sort((a, b) => key(groups[a]).localeCompare(key(groups[b])) || a.localeCompare(b, 'ru'));
+    let sel = ui.chip[area]; if (sel !== 'all' && !groups[sel]) sel = ui.chip[area] = 'all';
+    chips = `<div class="chips"><div class="chip ${sel === 'all' ? 'on' : 'glass'}" data-act="chip" data-a="${area}" data-v="all">Все <span>${op.length}</span></div>${names.map(n =>
+      `<div class="chip ${sel === n ? 'on' : 'glass'}" data-act="chip" data-a="${area}" data-v="${esc(n)}">${esc(n)} <span>${groups[n].filter(t => !t.done).length}</span></div>`).join('')}</div>`;
+    const pick = l => sel === 'all' ? l : l.filter(t => (t.group || 'Новые') === sel);
+    const lateL = pick(all.filter(overdue));
+    if (lateL.length) body += groupBlock('Просрочено', lateL, { cls: 'late', group: true });
+    names.filter(n => sel === 'all' || n === sel).forEach(n => {
+      const l = groups[n].filter(t => !overdue(t)); if (l.length) body += groupBlock(n, l);
+    });
+  }
+  if (!body) body = `<div class="empty">Здесь пока пусто. Напишите задачу внизу — она появится здесь.</div>`;
+  const rep = area === 'work' ? `<button class="rep glass" data-go="report/work">${DOC}Отчёт</button>` : '';
+  return `<div class="top"><div class="hd"><h1>${A.name}</h1>${RABBIT(mood(all, 1), 'bun')}</div>
+      <div class="say"><span></span>${rep}</div>${chips}</div>
+    <div class="main">${body}</div>`;
+}
+SCREENS.work = () => areaScreen('work');
+SCREENS.study = () => areaScreen('study');
+SCREENS.personal = () => areaScreen('personal');
+
+SCREENS.cal = () => {
+  const sel = ui.cal, t = today();
+  const [y, m] = ui.month.split('-').map(Number);
+  const first = new Date(y, m - 1, 1), off = (first.getDay() + 6) % 7, len = new Date(y, m, 0).getDate();
+  const has = new Set([...S().events.map(e => e.date), ...open().filter(x => x.due).map(x => x.due)]);
+  let g = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map(w => `<div class="wd">${w}</div>`).join('');
+  for (let i = 0; i < off; i++) g += '<div class="d off">·</div>';
+  for (let d = 1; d <= len; d++) {
+    const s = `${y}-${pad(m)}-${pad(d)}`, wd = (off + d - 1) % 7;
+    const c = ['d']; if (wd >= 5) c.push('we'); if (has.has(s)) c.push('has'); if (s === t) c.push('td'); if (s === sel) c.push('sel');
+    g += `<div class="${c.join(' ')}" data-act="day" data-d="${s}">${d}</div>`;
+  }
+  const ws = weekStart(sel);
+  const wk = [0, 1, 2, 3, 4, 5, 6].map(i => { const s = addDays(ws, i), d = pd(s); return `<div class="${s === sel ? 'on' : 'glass'}" data-act="day" data-d="${s}">${d.getDate()}<small>${WD[d.getDay()]}</small></div>`; }).join('');
+
+  const evs = dayEvents(sel), cl = clashes(evs);
+  const tasks = sortTasks(live().filter(x => x.due === sel && (!x.done || shown(x))));
+  const row = e => `<div class="mt${cl.has(e.id) ? ' clash' : ''}" data-act="event" data-id="${e.id}"><div class="tm">${e.start}<small>до ${e.end}</small></div>
+    <div><div class="t">${esc(e.title)}</div><div class="m"><span>${[AREAS[e.area]?.low, e.group, e.with].filter(Boolean).map(esc).join(' · ')}</span></div>${cl.has(e.id) ? '<div class="clashnote">накладка</div>' : ''}</div></div>`;
+  const meets = evs.filter(e => e.kind === 'meeting'), events = evs.filter(e => e.kind !== 'meeting');
+  let list = '';
+  if (meets.length) list += `<div class="agh">Встречи<span>${meets.length}</span></div><div class="card glass">${meets.map(row).join('')}</div>`;
+  if (events.length) list += `<div class="agh">Мероприятия<span>${events.length}</span></div><div class="card glass">${events.map(row).join('')}</div>`;
+  if (tasks.length) list += `<div class="agh">Задачи<span>${tasks.filter(x => !x.done).length}</span></div><div class="card glass">${tasks.map(x =>
+    `<div class="dl${x.done ? ' done' : ''}" data-go="task/${x.id}" data-tid="${x.id}"><span class="ck" data-act="done" data-id="${x.id}"></span><div><div class="t">${esc(x.title)}</div><div class="m">${meta(x, { area: true, noSrc: true })}</div></div></div>`).join('')}</div>`;
+  if (!list) list = '<div class="empty">В этот день ничего не запланировано.</div>';
+
+  const n = evs.length + tasks.filter(x => !x.done).length;
+  const firstClash = evs.find(e => cl.has(e.id));
+  const dayName = sel === t ? 'Сегодня' : sel === addDays(t, 1) ? 'Завтра' : `${pd(sel).getDate()} ${MONG[pd(sel).getMonth()]}`;
+  const say = n ? `${dayName} ${N(n, ['дело', 'дела', 'дел'])}.${firstClash ? ` Есть накладка в ${firstClash.start}.` : ''}` : `${dayName} свободно.`;
+  return `<div class="top"><div class="hd"><h1>${MONN[m - 1]}</h1>${RABBIT('calm', 'bun')}</div><div class="say"><span></span></div></div>
+    <div class="main" data-cal>
+      <div class="wkwrap"><div class="wk">${wk}</div></div>
+      <div class="cal glass"><div class="mh">${y}<span class="nav"><button data-act="month" data-v="-1" aria-label="Назад">‹</button><button data-act="month" data-v="1" aria-label="Вперёд">›</button></span></div><div class="g">${g}</div></div>
+      ${list}
+    </div>`;
+};
+
+SCREENS.task = r => {
+  const t = Store.task(r.id);
+  if (!t) return null;
+  const A = AREAS[t.area];
+  const n = t.items.length, k = t.items.filter(i => i.done).length, next = t.items.find(i => !i.done);
+  const lbl = t.done ? `сделано ${dayWord(t.doneAt)}` : t.due ? inDays(t.due) : 'без срока';
+  const ring = t.big ? `<div class="rg"><span>${RING(n ? k / n : 0)}${next ? 'Дальше: ' + esc(next.t) : 'Все пункты готовы'}</span><span>${k} из ${n}</span></div>` : '';
+  const check = t.check ? `<div class="check"><b>Проверьте</b><p>${esc(t.checkWhy || 'Сомневаюсь, что это задача.')}</p>
+    <div class="acts"><button class="pill w" data-act="confirm" data-id="${t.id}">Да, задача</button><button class="pill" data-act="not" data-id="${t.id}">Не задача</button></div></div><div class="gap"></div><div class="gap"></div>` : '';
+  const src = t.source || {};
+  const info = `<div class="card glass">
+    <div class="row2 chev"><span>Срок</span><span class="v strong">${t.due ? long(t.due) : '<span class="pill dark">Поставить срок</span>'}</span>
+      <input class="over" type="date" value="${t.due || ''}" data-change="due" data-id="${t.id}" aria-label="Срок"></div>
+    ${t.due ? `<div class="row2 chev"><span>Время</span><span class="v">${t.time || 'не указано'}</span><input class="over" type="time" value="${t.time || ''}" data-change="time" data-id="${t.id}" aria-label="Время"></div>` : ''}
+    ${t.from ? `<div class="row2"><span>От кого</span><span class="v">${esc(t.from)}</span></div>` : ''}
+    <div class="row2"${src.quote ? ' style="border:0"' : ''}><span>Откуда</span><span class="v">${src.kind === 'вручную' ? 'добавлено вручную' : esc(src.kind)}${src.date ? ', ' + dayMon(src.date) : ''}</span></div>
+    ${src.quote ? `<div class="quote">«${esc(src.quote)}»</div>` : ''}</div>`;
+  const nudge = !t.due && !t.done ? '<div class="ws" style="padding:8px 4px 0">Срока нет — без него напоминаний не будет.</div>' : '';
+  const chk = `<div class="chk glass"><div class="subs">${n ? `<div class="cnt">${k} из ${n}</div>` : ''}${t.items.map((it, i) =>
+    `<div class="si${it.done ? ' ok' : ''}" data-act="item" data-id="${t.id}" data-i="${i}"><i></i>${esc(it.t)}</div>`).join('')}
+    <form class="add" data-submit="item" data-id="${t.id}"><i></i><input name="v" placeholder="Добавить пункт" autocomplete="off" enterkeyhint="done"></form></div></div>`;
+  return `<div class="top"><div class="nv"><button class="back" data-act="back" data-to="${t.area}">‹ ${A.name}</button><span class="r">${esc(t.group || '')}</span></div></div>
+    <div class="main">
+      <div class="tt"><div class="lbl">${lbl}</div><h1>${esc(t.title)}</h1>${ring}</div><div class="gap"></div><div class="gap"></div>
+      ${check}${info}${nudge}<div class="gap"></div><div class="gap"></div>${chk}<div class="gap"></div><div class="gap"></div>
+      <div class="acts"><button class="pill ${t.done ? '' : 'dark'}" data-act="done" data-id="${t.id}">${t.done ? 'Вернуть в работу' : 'Сделано'}</button>
+        <button class="pill" data-act="move" data-id="${t.id}">Перенести в другую ${t.area === 'study' ? 'тему' : 'группу'}</button>
+        ${src.kind === 'вручную' ? `<button class="pill" data-act="del" data-id="${t.id}">Удалить</button>` : t.check ? '' : `<button class="pill" data-act="not" data-id="${t.id}">Не задача</button>`}</div>
+      <div style="height:34px"></div>
+      <button class="btn-main" data-act="prompt" data-id="${t.id}">${COPY}Скопировать промпт</button>
+      <p class="note">Задача, нюансы и цитата — одним текстом</p>
+    </div>`;
+};
+
+SCREENS.report = r => {
+  const area = r.id || 'work', t = today(), week = ui.per === 'week';
+  const from = week ? weekStart(t) : t.slice(0, 8) + '01';
+  const to = week ? addDays(from, 6) : iso(new Date(pd(from).getFullYear(), pd(from).getMonth() + 1, 0));
+  const done = live().filter(x => x.done && x.doneAt && (area === 'all' || x.area === area) && x.doneAt.slice(0, 10) >= from && x.doneAt.slice(0, 10) <= to)
+    .sort((a, b) => b.doneAt.localeCompare(a.doneAt));
+  const late = done.filter(x => x.due && x.doneAt.slice(0, 10) > x.due);
+  const fd = pd(from), td = pd(to);
+  const per = week ? (fd.getMonth() === td.getMonth() ? `${fd.getDate()}–${td.getDate()} ${MONG[td.getMonth()]}` : `${dayMon(from)} – ${dayMon(to)}`) : `${MONN[fd.getMonth()]} ${fd.getFullYear()}`;
+  let bars;
+  if (week) bars = [0, 1, 2, 3, 4, 5, 6].map(i => { const s = addDays(from, i); return [done.filter(x => x.doneAt.startsWith(s)).length, WD[pd(s).getDay()]]; });
+  else { bars = []; for (let a = 1; a <= td.getDate(); a += 7) { const b = Math.min(a + 6, td.getDate()); bars.push([done.filter(x => { const d = +x.doneAt.slice(8, 10); return d >= a && d <= b; }).length, `${a}–${b}`]); } }
+  const max = Math.max(1, ...bars.map(b => b[0]));
+  const gname = x => area === 'all' ? AREAS[x.area].name + (x.group ? ' · ' + x.group : '') : (x.group || AREAS[x.area].name);
+  const groups = {}; done.forEach(x => (groups[gname(x)] ||= []).push(x));
+  const lateTxt = x => { const n = diff(x.doneAt, x.due); return n === 1 ? 'на день позже' : `на ${N(n, ['день', 'дня', 'дней'])} позже`; };
+  const list = Object.entries(groups).map(([g, l]) => grp(g, l.length) + `<div class="card glass">${l.map(x =>
+    `<div class="dn${late.includes(x) ? ' late' : ''}" data-go="task/${x.id}"><span class="ck"></span><span class="t">${esc(x.title)}</span><span class="d">${dayMon(x.doneAt)}${late.includes(x) ? ', ' + lateTxt(x) : ''}</span></div>`).join('')}</div>`).join('');
+  ui.reportText = `Отчёт${area === 'all' ? '' : ' — ' + AREAS[area].low}, ${per}. Сделано: ${done.length}.\n` + Object.entries(groups).map(([g, l]) => `\n${g}\n` + l.map(x => `— ${x.title} (${dayMon(x.doneAt)})`).join('\n')).join('\n');
+  return `<div class="top"><div class="nv"><button class="back" data-act="back" data-to="${area === 'all' ? 'archive' : area}">‹ ${area === 'all' ? 'Архив' : AREAS[area].name}</button></div></div>
+    <div class="main">
+      <div class="tt"><h1>Отчёт</h1><p>${per}${area === 'all' ? '' : ' · ' + AREAS[area].low}</p></div>
+      <div class="seg glass"><div class="${week ? 'on' : ''}" data-act="per" data-v="week">Неделя</div><div class="${week ? '' : 'on'}" data-act="per" data-v="month">Месяц</div></div>
+      <div class="stats"><div class="st glass"><b>${done.length}</b><span>сделано</span></div><div class="st glass"><b>${done.length - late.length}</b><span>вовремя</span></div><div class="st glass"><b>${late.length}</b><span>позже срока</span></div></div>
+      <div class="days glass">${bars.map(([v, l]) => `<div><i class="${v ? '' : 'z'}" style="${v ? `height:${Math.max(8, Math.round(v / max * 52))}px` : ''}"></i>${l}</div>`).join('')}</div>
+      ${list || '<div class="empty">За этот период пока ничего не сделано.</div>'}
+      <div style="height:28px"></div>
+      ${done.length ? `<button class="btn-main" data-act="copyrep">${COPY}Скопировать отчёт</button><p class="note">Списком по группам — можно сразу отправить</p>` : ''}
+    </div>`;
+};
+
+const inner = (back, to, title, p, body, right = '') => `<div class="top"><div class="nv"><button class="back" data-act="back" data-to="${to}">‹ ${back}</button>${right}</div></div>
+  <div class="main"><div class="tt"><h1>${title}</h1>${p ? `<p>${p}</p>` : ''}</div><div class="gap"></div>${body}</div>`;
+const row2 = (t, v, o = {}) => `<div class="row2${o.chev ? ' chev' : ''}"${o.go ? ` data-go="${o.go}"` : ''}${o.act ? ` data-act="${o.act}"` : ''}><div class="t">${t}</div><div class="v">${v}</div></div>`;
+
+SCREENS.more = () => {
+  const w = S().waiting.filter(x => !x.got).length;
+  const j = S().journal.filter(x => !x.taken).length + S().tasks.filter(x => x.notTask).length;
+  return inner('Главная', 'home', 'Ещё', '', `<div class="card glass">
+    ${row2('Жду от других', w || '', { chev: 1, go: 'waiting' })}
+    ${row2('Архив и отчёт', '', { chev: 1, go: 'archive' })}
+    ${row2('Не стало задачами<small>то, что ИИ отбросил</small>', j || '', { chev: 1, go: 'journal' })}
+    ${row2('Настройки', '', { chev: 1, go: 'settings' })}</div>`);
+};
+
+SCREENS.waiting = () => {
+  const l = S().waiting.filter(x => !x.got), by = {};
+  l.forEach(x => (by[x.who] ||= []).push(x));
+  const body = Object.entries(by).map(([who, xs]) => grp(who, xs.length) + `<div class="card glass">${xs.map(x => {
+    const n = diff(today(), x.asked);
+    const ws = n === 0 ? 'просили сегодня' : n === 1 ? 'просили вчера' : `просили ${dayMon(x.asked)} · ${n >= 3 ? `<b>ответа нет ${N(n, ['день', 'дня', 'дней'])}</b>` : `ответа нет ${N(n, ['день', 'дня', 'дней'])}`}`;
+    return `<div class="it2"><div class="t">${esc(x.what)}</div><div class="ws">${ws}</div><div class="ft2"><button class="pill" data-act="got" data-id="${x.id}">Получила</button></div></div>`;
+  }).join('')}</div>`).join('');
+  return inner('Ещё', 'more', 'Жду от других', 'Вы просили — ответа пока нет.', body || '<div class="empty">Сейчас Вы ни от кого ничего не ждёте.</div>');
+};
+
+SCREENS.journal = () => {
+  const ai = S().journal.filter(x => !x.taken).map(x => `<div class="it2"><div class="src">${esc(x.src)} · ${x.at.slice(11, 16)}</div><div class="t">${esc(x.title)}</div><div class="why">${esc(x.why)}</div>
+    <div class="ft2"><button class="pill" data-act="j2task" data-id="${x.id}">Сделать задачей</button></div></div>`);
+  const mine = S().tasks.filter(x => x.notTask).map(x => `<div class="it2"><div class="src">${AREAS[x.area].low}${x.group ? ' · ' + esc(x.group) : ''} · Вы отметили «не задача»</div><div class="t">${esc(x.title)}</div>
+    <div class="ft2"><button class="pill" data-act="back2task" data-id="${x.id}">Вернуть в задачи</button></div></div>`);
+  const all = [...mine, ...ai];
+  return inner('Ещё', 'more', 'Не стало задачами', 'Мне показалось, что это не задачи. Проверьте — вдруг это ошибка.', all.length ? `<div class="card glass">${all.join('')}</div>` : '<div class="empty">Здесь пусто.</div>');
+};
+
+SCREENS.archive = () => {
+  const q = ui.q.trim().toLowerCase();
+  const base = live().filter(x => x.done && x.doneAt);
+  const cnt = a => base.filter(x => a === 'all' || x.area === a).length;
+  const l = base.filter(x => (ui.arch === 'all' || x.area === ui.arch) && (!q || x.title.toLowerCase().includes(q) || (x.group || '').toLowerCase().includes(q) || (x.from || '').toLowerCase().includes(q)))
+    .sort((a, b) => b.doneAt.localeCompare(a.doneAt));
+  const hl = s => { const e = esc(s); if (!q) return e; const i = s.toLowerCase().indexOf(q); return i < 0 ? e : esc(s.slice(0, i)) + '<mark>' + esc(s.slice(i, i + q.length)) + '</mark>' + esc(s.slice(i + q.length)); };
+  const by = {}; l.forEach(x => { const d = pd(x.doneAt); (by[`${MONN[d.getMonth()]} ${d.getFullYear()}`] ||= []).push(x); });
+  const body = Object.entries(by).map(([m, xs]) => grp(m.replace(` ${new Date().getFullYear()}`, ''), xs.length) + `<div class="card glass">${xs.map(x =>
+    `<div class="it2" data-go="task/${x.id}"><div class="t">${hl(x.title)}</div><div class="ws">${dayMon(x.doneAt)} · ${esc(x.group || AREAS[x.area].low)}${x.from ? ' · от ' + esc(gen(x.from)) : ''}${srcWord(x.source?.kind) ? ' · ' + srcWord(x.source.kind) : ''}</div></div>`).join('')}</div>`).join('');
+  const chips = `<div class="chips">${[['all', 'Все'], ['work', 'Работа'], ['study', 'Учёба'], ['personal', 'Личное']].map(([k, n]) =>
+    `<div class="chip ${ui.arch === k ? 'on' : 'glass'}" data-act="arch" data-v="${k}">${n} <span>${cnt(k) || ''}</span></div>`).join('')}</div>`;
+  return `<div class="top"><div class="nv"><button class="back" data-act="back" data-to="more">‹ Ещё</button><button class="pill" data-go="report/${ui.arch}">Отчёт</button></div>
+      <div class="tt"><h1>Архив</h1></div>
+      <label class="search glass">${LOUPE}<input type="search" placeholder="Поиск по сделанному" value="${esc(ui.q)}" data-input="q" autocomplete="off" enterkeyhint="search"></label>${chips}</div>
+    <div class="main">${body || `<div class="empty">${q ? 'Ничего не нашлось.' : 'Сделанные задачи будут храниться здесь.'}</div>`}</div>`;
+};
+
+/* ---------- storage: Даша's private repo (sync.js) ---------- */
+const GH_NEW = 'https://github.com/settings/personal-access-tokens/new?name=Oki&description=' + encodeURIComponent('Oki: задачи в закрытом хранилище')
+  + '&expires_in=366&contents=write&actions=write&secrets=write';
+const GH_ERR = {
+  offline: 'Нет сети. Сохраню, когда появится.',
+  busy: 'GitHub просит подождать. Повторю чуть позже.',
+  auth: 'Ключ GitHub не работает: истёк или удалён.',
+  perm: 'У ключа GitHub нет права записи в хранилище.',
+  norepo: 'Не нахожу закрытое хранилище.',
+  badkey: 'Ключ шифрования не подходит.',
+  empty: 'Хранилище пустое: файл с задачами пропал.',
+};
+const GH_FIX = { auth: ['Вставить новый ключ', 'gh'], perm: ['Создать ключ заново', 'gh'], norepo: ['Подключить заново', 'gh'], badkey: ['Ввести ключ шифрования', 'gh/key'] };
+function whenSaved() {
+  const c = Sync.cfg; if (!c?.last) return Sync.st.status === 'busy' ? 'сохраняю…' : 'ещё не было';
+  const d = new Date(c.last), day = iso(d);
+  return `${day === today() ? 'сегодня' : dayWord(day)}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function storageCard() {
+  if (!Sync.on) return `<div class="card glass">${row2('<span class="dotok"></span>Где лежат задачи', 'в этом телефоне')}
+    <div class="txt" style="padding-top:2px">Подключите Ваше закрытое хранилище на GitHub — тогда задачи не пропадут, даже если сменить телефон.</div>
+    ${row2('Подключить хранилище', '', { chev: 1, go: 'gh' })}</div>`;
+  const c = Sync.cfg, err = GH_ERR[Sync.st.status], fix = GH_FIX[Sync.st.status];
+  const left = c.exp ? diff(c.exp, today()) : null;
+  return `<div class="card glass">${row2(`<span class="${err && Sync.st.status !== 'offline' ? 'dotbad' : 'dotok'}"></span>Где лежат задачи`, `в хранилище ${esc(c.repo)}`)}
+    ${err ? `<div class="it2"><div class="t">${err}</div>${fix ? `<div class="ft2"><button class="pill dark" data-go="${fix[1]}">${fix[0]}</button></div>` : ''}</div>` : ''}
+    ${row2('Последнее сохранение', whenSaved())}
+    ${row2('Ключ GitHub', left == null ? 'бессрочный' : left < 0 ? '<b>истёк</b>' : left <= 14 ? `<b>${left ? `истекает ${inDays(c.exp)}` : 'истекает сегодня'}</b>` : `до ${dayMon(c.exp)} ${c.exp.slice(0, 4)}`)}
+    ${row2('Ключ шифрования', 'показать', { chev: 1, act: 'ghkey' })}
+    ${row2('Отключить на этом телефоне', '', { chev: 1, act: 'ghoff' })}</div>`;
+}
+
+SCREENS.settings = () => inner('Ещё', 'more', 'Настройки', '', `
+  ${grp('Обо мне', '')}<div class="card glass">${row2('Как к Вам обращаться', esc(S().settings.name), { chev: 1, act: 'name' })}</div>
+  ${grp('Люди', '')}<div class="card glass">${row2('Кто есть кто', N(S().people.length, ['человек', 'человека', 'человек']), { chev: 1, go: 'people' })}</div>
+  ${grp('Хранение', '')}${storageCard()}
+  ${Sync.on ? '' : `${grp('Примерные задачи', '')}<div class="card glass">${S().demo
+    ? row2('Стереть примерные задачи<small>и начать с чистого листа</small>', '', { chev: 1, act: 'cleardemo' })
+    : row2('Показать примерные задачи', '', { chev: 1, act: 'demo' })}</div>`}
+  ${grp('Подключение', '')}<div class="card glass">${row2('Как всё отключить', '', { chev: 1, go: 'off' })}</div>`);
+
+// connecting, «Oki объясняет» (variant В, chosen by Даша 2026-10-11): one thought and one button per screen
+const ghBack = `<button class="back obk" data-act="back" data-to="settings">‹ Настройки</button>`;
+const keyField = (name, ph, val = '') => `<div class="kin glass"><input class="in" name="${name}" placeholder="${ph}" value="${esc(val)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <button type="button" class="pill" data-act="paste">Вставить</button></div>`;
+SCREENS.gh = r => {
+  const step = r.id || 'intro', p = ui.ghp;
+    if (step === 'paste' || (step !== 'intro' && step !== 'done' && !p)) return `<form class="onb sm" data-submit="ghtoken">${ghBack}<div class="rb">${RABBIT('calm', '', true)}</div>
+    <h1>Вставьте ключ</h1><p>Тот, что GitHub показал после <b>Generate token</b>. Он начинается с <b>github_pat_</b>.</p>
+    ${keyField('token', 'github_pat_…')}
+    <div class="bt"><button class="btn-main" type="submit" data-busy="Проверяю…">Проверить</button><a class="btn-ghost" href="${GH_NEW}" target="_blank" rel="noopener" style="margin-top:8px">Открыть GitHub ещё раз</a></div></form>`;
+  if (step === 'key') return `<form class="onb sm" data-submit="ghjoin">${ghBack}<div class="rb">${RABBIT('calm', '', true)}</div>
+    <h1>Ключ шифрования</h1><p>В хранилище уже есть Ваши задачи. Чтобы открыть их, нужен ключ из приложения <b>«Пароли»</b>. Он начинается с <b>OKI-</b>.</p>
+    ${keyField('key', 'OKI-…')}
+    <div class="bt"><button class="btn-main" type="submit" data-busy="Открываю…">Открыть задачи</button></div></form>`;
+  if (step === 'new') return `<div class="onb sm">${ghBack}<div class="rb">${RABBIT('calm', '', true)}</div>
+    <h1>Это ключ<br>шифрования</h1><div class="keybox glass">${ui.ghkey.slice(4).split('-').join(' ')}</div>
+    <p>Без него Ваши задачи не прочитает никто — даже я. Сохраните его в <b>«Паролях»</b>: он понадобится на новом телефоне.</p>
+    <div class="bt"><button class="btn-main" data-act="ghcopy">${COPY}Скопировать</button><button class="btn-ghost" data-act="ghstart" data-busy="Сохраняю…" style="margin-top:8px">Ключ сохранён</button></div></div>`;
+  if (step === 'done') return `<div class="onb"><span class="logo" style="font-size:34px">Oki</span><div class="rb">${RABBIT('happy', '', true)}</div>
+    <h1>Всё на месте.</h1><p>Задачи теперь хранятся в Вашем закрытом хранилище. Смените телефон — они останутся.${ui.ghwasdemo ? ' Примерные задачи убраны, здесь будут только Ваши.' : ''}</p>
+    <div class="bt"><button class="btn-main" data-act="ghdone">Хорошо</button></div></div>`;
+  return `<div class="onb">${ghBack}<span class="logo" style="font-size:34px">Oki</span><div class="rb">${RABBIT('calm', '', true)}</div>
+    <h1>Мне нужен ключ<br>от Вашего хранилища</h1><p>GitHub выдаст его за минуту. Страница откроется уже заполненной: выберите хранилище <b>oki-data</b>, внизу нажмите <b>Generate token</b>, потом <b>Copy</b>.</p>
+    <div class="bt"><a class="btn-main" href="${GH_NEW}" target="_blank" rel="noopener" data-act="ghopen">Открыть GitHub</a><button class="btn-ghost" data-go="gh/paste" style="margin-top:8px">Вставить скопированный ключ</button></div></div>`;
+};
+// busy text and error line are set in place: a redraw would empty the field Даша just filled
+async function ghStep(fn, okStep) {
+  const pane = Nav.cur.el, btn = pane.querySelector('[type="submit"], [data-act="ghstart"]');
+  if (ui.ghbusy) return;
+  ui.ghbusy = true;
+  const label = btn.innerHTML; btn.textContent = btn.dataset.busy;
+  pane.querySelector('.say')?.remove();
+  try { await fn(); if (okStep) go(okStep); }
+  catch (e) {
+    const msg = { auth: 'GitHub не принял ключ. Скопируйте его ещё раз целиком.', norepo: 'Ключ работает, но хранилище oki-data ему не открыто. Создайте ключ заново и выберите oki-data.',
+      badkey: 'Ключ не подходит. Проверьте, что вставили его целиком.', perm: 'У ключа нет права записи. Создайте его заново по кнопке «Открыть GitHub».',
+      busy: 'GitHub просит подождать минуту.' }[e.code] || 'Нет связи с GitHub. Проверьте интернет и попробуйте ещё раз.';
+    pane.querySelector('.onb .bt').insertAdjacentHTML('beforebegin', `<p class="say">${msg}</p>`);
+  } finally { ui.ghbusy = false; btn.innerHTML = label; }
+}
+
+SCREENS.people = () => {
+  const by = { work: [], study: [], personal: [] };
+  S().people.forEach(p => (by[p.area] || by.personal).push(p));
+  const body = Object.entries(by).filter(([, l]) => l.length).map(([a, l]) => grp(AREAS[a].name, l.length) + `<div class="card glass">${l.map(p =>
+    `<div class="row2 chev" data-act="person" data-id="${p.id}"><div class="t">${esc(p.name)}${p.role ? `<span class="role">${esc(p.role)}</span>` : ''}</div><div class="v"></div></div>`).join('')}</div>`).join('');
+  return inner('Настройки', 'settings', 'Кто есть кто', 'По этому списку я понимаю, кто что поручает.', body + '<div class="gap"></div><div class="gap"></div><button class="pill" data-act="person">＋ Добавить человека</button>');
+};
+
+SCREENS.off = () => inner('Настройки', 'settings', 'Как всё отключить', Sync.on ? 'Пока подключено только хранилище на GitHub. Отключить всё можно так:' : 'Пока ничего не подключено. Когда подключим почту, Telegram и GitHub, отключить их можно так:', `<div class="card glass"><div class="txt">
+  <b>Telegram</b> → Настройки → Устройства → завершить сеанс Oki.<br><br>
+  <b>Яндекс</b> → Безопасность → Пароли приложений → удалить пароль Oki.<br><br>
+  <b>GitHub</b> → Settings → Developer settings → удалить ключ Oki. Или удалить закрытое хранилище целиком.</div></div>`);
+
+/* ---------- sheet + toast ---------- */
+const layer = () => $('#layer');
+let sh = null;
+function sheet(html) {
+  const L = layer();
+  L.innerHTML = `<div class="dim" data-act="close"></div><div class="sheet" role="dialog"><div class="grab"></div>${html}</div>`;
+  // a short sheet belongs to the finger (drag down to close); a long one scrolls
+  const el = L.querySelector('.sheet'); el.style.touchAction = el.scrollHeight > el.clientHeight + 1 ? 'pan-y' : 'none';
+  requestAnimationFrame(() => requestAnimationFrame(() => L.classList.add('on')));
+}
+function closeSheet() {
+  const L = layer(); L.classList.remove('on'); sh = null;
+  document.activeElement?.blur?.();
+  setTimeout(() => { if (!L.classList.contains('on')) L.innerHTML = ''; }, 330);
+}
+let tt;
+function toast(msg) { const T = $('#toast'); T.textContent = msg; T.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => T.classList.remove('on'), 2200); }
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) {
+    const a = document.createElement('textarea'); a.value = text; a.style.position = 'fixed'; a.style.opacity = '0'; document.body.append(a); a.select();
+    const ok = document.execCommand('copy'); a.remove(); return ok;
+  }
+}
+const opts = (k, list, cur) => `<div class="opts" data-k="${k}">${list.map(([v, n]) => `<button type="button" class="chip ${v === cur ? 'on' : ''}" data-act="opt" data-v="${esc(v)}">${esc(n)}</button>`).join('')}</div>`;
+const dateRow = (name, val, label, type = 'date') => `<div class="row2 chev"><span>${label}</span><span class="v" data-show="${name}">${fmtField(type, val)}</span>
+  <input class="over" type="${type}" name="${name}" value="${val || ''}" data-kind="${type}"></div>`;
+const fmtField = (type, v) => !v ? (type === 'date' ? 'без срока' : 'не указано') : type === 'date' ? `${short(v)}${v === today() ? ' · сегодня' : ''}` : v;
+
+/* quick text → date/time («завтра в 15:00», «до пятницы», «12 окт») */
+function parseWhen(s) {
+  let date = null, time = null, txt = ' ' + s + ' ';
+  const cut = re => { const m = txt.match(re); if (m) txt = txt.replace(m[0], ' '); return m; };
+  let m;
+  if ((m = cut(/\s(?:до|к|в)?\s*(\d{1,2})[:.](\d{2})(?=[\s,.!?])/i))) time = `${pad(+m[1])}:${m[2]}`;
+  if (cut(/\sпослезавтра(?=[\s,.!?])/i)) date = addDays(today(), 2);
+  else if (cut(/\sзавтра(?=[\s,.!?])/i)) date = addDays(today(), 1);
+  else if (cut(/\sсегодня(?=[\s,.!?])/i)) date = today();
+  else if ((m = cut(/\s(?:в|во|до|к|на)?\s*(понедельник|вторник|сред[уыа]|четверг|пятниц[уыа]|суббот[уыа]|воскресень[ея])(?=[\s,.!?])/i))) {
+    const map = { пон: 1, вто: 2, сре: 3, чет: 4, пят: 5, суб: 6, вос: 0 };
+    const w = map[m[1].slice(0, 3).toLowerCase()], d0 = new Date().getDay();
+    date = addDays(today(), ((w - d0 + 7) % 7) || 7);
+  } else if ((m = cut(/\s(?:до|к|на)?\s*(\d{1,2})\s+(янв|фев|мар|апр|ма[яй]|июн|июл|авг|сен|окт|ноя|дек)[а-я]*(?=[\s,.!?])/i))) {
+    const mi = ['янв', 'фев', 'мар', 'апр', 'ма', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'].findIndex(x => m[2].toLowerCase().startsWith(x));
+    const y = new Date().getFullYear(); let d = iso(new Date(y, mi, +m[1])); if (d < today()) d = iso(new Date(y + 1, mi, +m[1])); date = d;
+  }
+  if (time && !date) date = today();
+  const title = txt.replace(/\s+/g, ' ').trim().replace(/^./, c => c.toUpperCase());
+  return { title: title || s.trim(), date, time };
+}
+
+function openAdd(o) {
+  const p = parseWhen(o.text || '');
+  const cal = o.mode === 'cal';
+  let kind = o.kind || 'task';
+  if (cal && /созвон|встреч|звонок|переговор/i.test(p.title)) kind = 'meeting';
+  const area = o.area || (cal ? 'work' : null);
+  const date = p.date || (cal ? ui.cal : null);
+  let start = p.time;
+  if (kind !== 'task' && !start) { const h = Math.min(new Date().getHours() + 1, 22); start = `${pad(h)}:00`; }
+  sh = { mode: o.mode, kind, area, group: o.group || null, journal: o.journal || null, fixedArea: !!o.fixedArea };
+  sheet(`<form data-submit="add">
+    <h3>${cal ? 'Добавить' : 'Новая задача'}</h3>
+    <textarea class="in" name="title" rows="2" placeholder="Что нужно сделать" enterkeyhint="done">${esc(p.title)}</textarea>
+    ${cal ? `<div class="lab">Что это</div>${opts('kind', [['task', 'Задача'], ['meeting', 'Встреча'], ['event', 'Мероприятие']], kind)}` : ''}
+    <div data-slot="area">${areaBlock()}</div>
+    <div data-slot="group">${groupBlockSheet()}</div>
+    <div class="rows" data-slot="when">${whenBlock(date, start, p.time)}</div>
+    <button class="btn-main" type="submit">Добавить</button>
+  </form>`);
+}
+function areaBlock() {
+  if (sh.fixedArea) return '';
+  return `<div class="lab">Куда</div>${opts('area', [['work', 'Работа'], ['study', 'Учёба'], ['personal', 'Личное']], sh.area)}`;
+}
+function groupBlockSheet() {
+  if (sh.kind !== 'task' || !sh.area || sh.area === 'personal') return '';
+  const names = [...new Set(S().tasks.filter(t => t.area === sh.area && t.group && !t.done).map(t => t.group))];
+  if (sh.group && !names.includes(sh.group)) names.push(sh.group);
+  return `<div class="lab">${AREAS[sh.area].grp}</div>${opts('group', [...names.map(n => [n, n]), ['+', '＋ Новая']], sh.group)}
+    <input class="in" name="newgroup" placeholder="Название" style="margin-top:8px;display:${sh.group === '+' ? 'block' : 'none'}" autocomplete="off">`;
+}
+function whenBlock(date, time, hadTime) {
+  if (sh.kind === 'task') return dateRow('date', date, 'Срок') + dateRow('time', hadTime || '', 'Время', 'time');
+  const [h, mm] = (time || '10:00').split(':').map(Number);
+  const end = `${pad(Math.min(h + 1, 23))}:${pad(mm)}`;
+  return dateRow('date', date || ui.cal, 'День') + dateRow('time', time, 'Начало', 'time') + dateRow('end', end, 'Конец', 'time');
+}
+function openMove(t) {
+  sh = { mode: 'move', id: t.id, kind: 'task', area: t.area, group: t.group };
+  sheet(`<form data-submit="move"><h3>Перенести</h3><div data-slot="area">${areaBlock()}</div><div data-slot="group">${groupBlockSheet()}</div>
+    <button class="btn-main" type="submit">Перенести</button></form>`);
+}
+function openEvent(e) {
+  sheet(`<h3>${esc(e.title)}</h3><div class="rows">
+    ${row2('День', long(e.date))}${row2('Время', `${e.start}–${e.end}`)}${row2('Где', [AREAS[e.area]?.name, e.group].filter(Boolean).map(esc).join(' · ') || '—')}${e.with ? row2('С кем', esc(e.with)) : ''}</div>
+    <button class="del" data-act="delevent" data-id="${e.id}">Удалить</button>`);
+}
+function openPerson(p) {
+  sh = { mode: 'person', id: p?.id || null, area: p?.area || 'work' };
+  sheet(`<form data-submit="person"><h3>${p ? esc(p.name) : 'Новый человек'}</h3>
+    <div class="lab">Имя</div><input class="in" name="name" value="${esc(p?.name || '')}" placeholder="Как подписан в почте или Telegram" autocomplete="off">
+    <div class="lab">Кто это</div><input class="in" name="role" value="${esc(p?.role || '')}" placeholder="например, руководитель" autocomplete="off">
+    <div class="lab">Откуда</div>${opts('area', [['work', 'Работа'], ['study', 'Учёба'], ['personal', 'Личное']], sh.area)}
+    <button class="btn-main" type="submit">Сохранить</button>${p ? `<button class="del" type="button" data-act="delperson" data-id="${p.id}">Удалить из списка</button>` : ''}</form>`);
+}
+function confirmSheet(title, text, btn, act) {
+  sheet(`<h3>${title}</h3><p class="txt" style="padding:0 4px">${text}</p><button class="btn-main" data-act="${act}">${btn}</button><button class="btn-ghost" data-act="close">Отмена</button>`);
+}
+
+/* ---------- actions ---------- */
+function toggleDone(id) {
+  const t = Store.task(id), done = !t.done;
+  if (done) ui.hop = Date.now(); // the rabbit hops on the next screen it appears on
+  Store.act('task_done', { ref: id, done });
+  if (done) rowOf(id)?.classList.add('pop');
+}
+const A = {
+  close: closeSheet,
+  back: el => back(el.dataset.to),
+  mic: () => toast('Запись голосом появится чуть позже'),
+  'onb-bell': async () => { try { if ('Notification' in window) await Notification.requestPermission(); } catch (e) {} Nav.intent = { anim: 'fade', stack: 'reset' }; Store.setFlag('onboarded', true); },
+  'onb-later': () => { Nav.intent = { anim: 'fade', stack: 'reset' }; Store.setFlag('onboarded', true); },
+  near: el => { ui.cal = el.dataset.d; ui.month = ui.cal.slice(0, 7); go('cal'); },
+  chip: el => { ui.chip[el.dataset.a] = el.dataset.v; render(); },
+  done: (el, e) => { e.stopPropagation(); toggleDone(el.dataset.id); },
+  fold: (el, e) => { e.stopPropagation(); ui.open[el.dataset.id] = !ui.open[el.dataset.id]; render(); },
+  item: (el, e) => { e.stopPropagation(); const t = Store.task(el.dataset.id), i = +el.dataset.i; Store.act('item_done', { ref: t.id, i, done: !t.items[i].done }); },
+  confirm: el => { Store.act('task_confirm', { ref: el.dataset.id }); toast('Оставлено в задачах'); },
+  not: el => { const t = Store.task(el.dataset.id); Store.act('task_not', { ref: t.id }); toast('Убрано в «Не стало задачами»'); back(t.area); },
+  move: el => openMove(Store.task(el.dataset.id)),
+  del: el => { sh = { del: el.dataset.id }; confirmSheet('Удалить задачу?', 'Она исчезнет совсем, в архиве её не будет.', 'Удалить', 'del-ok'); },
+  'del-ok': () => {
+    const t = Store.task(sh.del), row = rowOf(t.id); closeSheet();
+    const kill = () => { Store.act('task_delete', { ref: t.id }); toast('Удалено'); };
+    if (row) collapseRow(row).then(kill); else { kill(); back(t.area); }
+  },
+  // buttons revealed by swiping a task to the left
+  sw: el => {
+    const t = Store.task(el.dataset.id), row = rowOf(t.id);
+    if (el.dataset.v === 'tomorrow') closeRow(() => { Store.act('task_due', { ref: t.id, due: addDays(today(), 1), time: t.time }); toast('Перенесено на завтра'); });
+    if (el.dataset.v === 'move') closeRow(() => openMove(t));
+    if (el.dataset.v === 'del') { sh = { del: t.id }; confirmSheet('Удалить задачу?', 'Она исчезнет совсем, в архиве её не будет.', 'Удалить', 'del-ok'); }
+    if (el.dataset.v === 'not') collapseRow(row).then(() => { Store.act('task_not', { ref: t.id }); toast('Убрано в «Не стало задачами»'); });
+  },
+  prompt: async el => {
+    const t = Store.task(el.dataset.id), s = t.source || {};
+    const lines = ['Помоги мне с задачей.', '', `Задача: ${t.title}`];
+    if (t.due) lines.push(`Срок: ${long(t.due)}${t.time ? ', ' + t.time : ''}`);
+    if (t.from) lines.push(`Поручение от: ${t.from}`);
+    if (s.kind && s.kind !== 'вручную') lines.push(`Откуда: ${s.kind}${s.date ? ', ' + dayMon(s.date) : ''}`);
+    if (s.quote) lines.push(`Цитата из источника: «${s.quote}»`);
+    if (t.items.length) lines.push('', 'Что нужно сделать:', ...t.items.map(i => `${i.done ? '[x]' : '[ ]'} ${i.t}`));
+    toast(await copy(lines.join('\n')) ? 'Промпт скопирован' : 'Не получилось скопировать');
+  },
+  copyrep: async () => toast(await copy(ui.reportText) ? 'Отчёт скопирован' : 'Не получилось скопировать'),
+  per: el => { ui.per = el.dataset.v; render(); },
+  day: el => { ui.cal = el.dataset.d; ui.month = ui.cal.slice(0, 7); render(); },
+  month: el => { const [y, m] = ui.month.split('-').map(Number); const d = new Date(y, m - 1 + +el.dataset.v, 1); ui.month = iso(d).slice(0, 7); ui.cal = ui.month === today().slice(0, 7) ? today() : iso(d); render(); },
+  event: el => openEvent(Store.event(el.dataset.id)),
+  delevent: el => { Store.act('event_delete', { ref: el.dataset.id }); closeSheet(); toast('Удалено'); },
+  got: el => { Store.act('wait_got', { ref: el.dataset.id }); toast('Отмечено'); },
+  j2task: el => { const j = S().journal.find(x => x.id === el.dataset.id); openAdd({ text: j.title.replace(/[«»]/g, ''), journal: j.id }); },
+  back2task: el => { Store.act('task_back', { ref: el.dataset.id }); toast('Возвращено в задачи'); },
+  arch: el => { ui.arch = el.dataset.v; render(); },
+  name: () => { sh = { mode: 'name' }; sheet(`<form data-submit="name"><h3>Как к Вам обращаться</h3><input class="in" name="name" value="${esc(S().settings.name)}" autocomplete="off"><button class="btn-main" type="submit">Сохранить</button></form>`); },
+  person: el => openPerson(el.dataset.id ? S().people.find(p => p.id === el.dataset.id) : null),
+  delperson: el => { Store.act('person_delete', { ref: el.dataset.id }); closeSheet(); },
+  cleardemo: () => confirmSheet('Стереть примерные задачи?', 'Все выдуманные задачи, встречи и люди исчезнут. Останется чистое приложение для Ваших настоящих задач.', 'Стереть', 'cleardemo-ok'),
+  paste: async el => { try { const t = (await navigator.clipboard.readText()).trim(); if (t) el.previousElementSibling.value = t; } catch (e) { el.previousElementSibling.focus(); toast('Нажмите в поле и выберите «Вставить»'); } },
+  ghopen: () => setTimeout(() => go('gh/paste'), 600),
+  ghcopy: async () => toast(await copy(ui.ghkey) ? 'Ключ скопирован' : 'Не получилось скопировать'),
+  ghstart: () => { ui.ghwasdemo = S().demo; ghStep(() => Sync.start(ui.ghp, ui.ghkey), 'gh/done'); },
+  ghdone: () => { ui.ghp = ui.ghkey = null; ui.scroll = {}; Nav.intent = { anim: 'pop', stack: 'reset' }; location.replace('#/settings'); },
+  ghkey: async () => sheet(`<h3>Ключ шифрования</h3><p class="txt" style="padding:0 4px">Только им открываются Ваши задачи. Храните его в «Паролях».</p>
+    <div class="keybox">${Sync.cfg.key.slice(4).split('-').join(' ')}</div><button class="btn-main" data-act="ghcopykey">${COPY}Скопировать</button>`),
+  ghcopykey: async () => { toast(await copy(Sync.cfg.key) ? 'Ключ скопирован' : 'Не получилось скопировать'); closeSheet(); },
+  ghoff: () => confirmSheet('Отключить хранилище?', 'Этот телефон перестанет сохранять задачи на GitHub. Задачи останутся и здесь, и в хранилище. Подключить снова можно в любой момент, понадобятся оба ключа.', 'Отключить', 'ghoff-ok'),
+  'ghoff-ok': () => { closeSheet(); Sync.forget(); render(); toast('Хранилище отключено'); },
+  'cleardemo-ok': () => { closeSheet(); ui.scroll = {}; Store.clearDemo(); go('home'); toast('Готово, чистый лист'); },
+  demo: () => confirmSheet('Показать примерные задачи?', 'Ваши задачи, добавленные вручную, будут заменены примерными.', 'Показать', 'demo-ok'),
+  'demo-ok': () => { closeSheet(); ui.scroll = {}; Store.restoreDemo(); go('home'); },
+  opt: el => {
+    const box = el.closest('.opts'), k = box.dataset.k, v = el.dataset.v;
+    box.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === el));
+    sh[k] = v;
+    const f = el.closest('form') || layer();
+    if (k === 'area') { sh.group = null; f.querySelector('[data-slot="group"]').innerHTML = groupBlockSheet(); }
+    if (k === 'kind') {
+      const d = f.querySelector('[name="date"]')?.value || ui.cal, tm = f.querySelector('[name="time"]')?.value;
+      if (!sh.area) { sh.area = 'work'; f.querySelector('[data-slot="area"]').innerHTML = areaBlock(); }
+      f.querySelector('[data-slot="group"]').innerHTML = groupBlockSheet();
+      f.querySelector('[data-slot="when"]').innerHTML = whenBlock(d, tm || null, tm);
+    }
+    if (k === 'group') { const ng = f.querySelector('[name="newgroup"]'); if (ng) { ng.style.display = v === '+' ? 'block' : 'none'; if (v === '+') ng.focus(); } }
+  },
+};
+
+const SUBMIT = {
+  ghtoken: f => {
+    const v = f.token.value.trim(); if (!v) { f.token.focus(); return; }
+    ghStep(async () => {
+      ui.ghp = await Sync.probe(v);
+      // a new GitHub key for an already connected phone: the encryption key is here already
+      if (ui.ghp.has && Sync.cfg?.key) { await Sync.join(ui.ghp, Sync.cfg.key); ui.ghwasdemo = false; go('gh/done'); return; }
+      if (!ui.ghp.has) ui.ghkey = Sync.newKey();
+      go(ui.ghp.has ? 'gh/key' : 'gh/new');
+    });
+  },
+  ghjoin: f => { const v = f.key.value; ui.ghwasdemo = S().demo; ghStep(() => Sync.join(ui.ghp, v), 'gh/done'); },
+  quick: f => {
+    const v = f.q.value.trim(); if (!v) return;
+    const r = route().name;
+    if (r === 'cal') openAdd({ text: v, mode: 'cal' });
+    else if (AREAS[r]) openAdd({ text: v, area: r, fixedArea: true, group: ui.chip[r] && ui.chip[r] !== 'all' ? ui.chip[r] : null });
+    else openAdd({ text: v });
+    f.q.value = ''; f.q.blur();
+  },
+  add: f => {
+    const title = f.title.value.trim().replace(/\s+/g, ' ');
+    if (!title) { f.title.focus(); return; }
+    const date = f.date?.value || null, time = f.time?.value || null;
+    if (sh.kind === 'task') {
+      if (!sh.area) { toast('Выберите, куда: работа, учёба или личное'); return; }
+      let group = sh.group === '+' ? (f.newgroup.value.trim() || null) : sh.group;
+      if (sh.area === 'personal') group = null;
+      const task = { area: sh.area, group, title, due: date, time: date ? time : null };
+      if (sh.journal) Store.act('journal_to_task', { ref: sh.journal, task_id: Store.uid(), task });
+      else Store.act('task_new', { task });
+      closeSheet(); toast(`Добавлено в «${AREAS[sh.area].name}»`);
+    } else {
+      if (!date || !time) { toast('Укажите день и время'); return; }
+      const end = f.end.value && f.end.value > time ? f.end.value : `${pad(Math.min(+time.slice(0, 2) + 1, 23))}:${time.slice(3)}`;
+      Store.act('event_new', { event: { kind: sh.kind, title, date, start: time, end, area: sh.area || 'work' } });
+      ui.cal = date; ui.month = date.slice(0, 7);
+      closeSheet(); toast('Добавлено в календарь');
+    }
+  },
+  move: f => {
+    let group = sh.group === '+' ? (f.newgroup.value.trim() || null) : sh.group;
+    if (sh.area === 'personal') group = null;
+    Store.act('task_move', { ref: sh.id, area: sh.area, group }); closeSheet(); toast('Перенесено');
+  },
+  item: f => { const v = f.v.value.trim(); if (!v) return; Store.act('item_add', { ref: f.dataset.id, text: v }); setTimeout(() => $('.chk .add input')?.focus(), 30); },
+  name: f => { const v = f.name.value.trim(); if (v) Store.act('settings', { settings: { name: v } }); closeSheet(); },
+  person: f => {
+    const name = f.name.value.trim(); if (!name) { f.name.focus(); return; }
+    Store.act('person_save', { ref: sh.id || Store.uid(), person: { name, role: f.role.value.trim(), area: sh.area } }); closeSheet();
+  },
+};
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act],[data-go]');
+  if (!el) return;
+  if (el.matches('input.over')) return;
+  if (el.dataset.act) { A[el.dataset.act]?.(el, e); return; }
+  go(el.dataset.go);
+});
+document.addEventListener('submit', e => { e.preventDefault(); const f = e.target; SUBMIT[f.dataset.submit]?.(f); });
+// Enter in the title textarea adds instead of a new line
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('textarea[name="title"]')) { e.preventDefault(); e.target.form.requestSubmit(); } });
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (el.dataset.change === 'due') Store.act('task_due', { ref: el.dataset.id, due: el.value || null, time: Store.task(el.dataset.id).time });
+  if (el.dataset.change === 'time') { const t = Store.task(el.dataset.id); Store.act('task_due', { ref: t.id, due: t.due, time: el.value || null }); }
+  if (el.dataset.kind) { const v = el.closest('.row2').querySelector('[data-show]'); if (v) v.textContent = fmtField(el.dataset.kind, el.value); }
+});
+document.addEventListener('input', e => {
+  if (e.target.dataset.input === 'q') {
+    ui.q = e.target.value;
+    const pos = e.target.selectionStart; render();
+    const i = $('[data-input="q"]'); i.focus(); i.setSelectionRange(pos, pos);
+  }
+});
+// desktop browsers: open the picker on click (iPhone opens it by itself)
+document.addEventListener('click', e => { if (e.target.matches('input.over') && e.target.showPicker && !/iPhone|iPad/.test(navigator.userAgent)) try { e.target.showPicker(); } catch (x) {} }, true);
+
+
+// storage status lives in Настройки; when saving breaks, say so once (TZ §10: no silent failures)
+Sync.sub(() => {
+  const k = Sync.st.status;
+  if (GH_ERR[k] && k !== 'offline' && k !== 'busy' && Sync.st.told !== k) { Sync.st.told = k; toast(GH_ERR[k] + ' Подробнее в Настройках.'); }
+  if (k === 'ok') Sync.st.told = '';
+  if (['settings', 'off'].includes(Nav.cur?.r.name)) render();
+});

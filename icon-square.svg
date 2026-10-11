@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="1024" height="1024">
+  <defs>
+    
+    <filter id="g" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="26"/></filter>
+    <filter id="aura" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="20"/></filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5"/></filter>
+    <radialGradient id="f" cx="45%" cy="40%" r="70%"><stop offset="0" stop-color="#fff"/><stop offset=".6" stop-color="#F1F1FD"/><stop offset="1" stop-color="#C9CCF6"/></radialGradient>
+    <g id="r">
+      <ellipse cx="74" cy="66" rx="17" ry="56" transform="rotate(-14 74 66)"/>
+      <ellipse cx="128" cy="70" rx="17" ry="54" transform="rotate(18 128 70)"/>
+      <ellipse cx="100" cy="140" rx="56" ry="46"/>
+      <ellipse cx="100" cy="206" rx="46" ry="40"/>
+    </g>
+  </defs>
+  <g>
+    <rect width="180" height="180" fill="#E9EBF0"/>
+    <circle cx="100" cy="86" r="72" fill="#C3C7F4" filter="url(#g)" opacity=".9"/>
+    <g transform="translate(-5 6) scale(.95)">
+      <use href="#r" fill="#A9AEF0" filter="url(#aura)" opacity=".85"/>
+      <use href="#r" fill="url(#f)" filter="url(#soft)"/>
+      <ellipse cx="80" cy="140" rx="5.5" ry="9" fill="#111317"/>
+      <ellipse cx="120" cy="140" rx="5.5" ry="9" fill="#111317"/>
+    </g>
+  </g>
+</svg>
