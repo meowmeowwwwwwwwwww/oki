@@ -963,7 +963,8 @@ const SUBMIT = {
         : { area: sh.area, group, title, due: date, time: date ? time : null };
       if (sh.journal) Store.act('journal_to_task', { ref: sh.journal, task_id: Store.uid(), task });
       else Store.act('task_new', { task });
-      closeSheet(); toast(daily ? 'Добавлено на Главную, каждый день' : `Добавлено в «${AREAS[sh.area].name}»`);
+      const msg = daily ? 'Добавлено на Главную, каждый день' : `Добавлено в «${AREAS[sh.area].name}»`; // before closeSheet() forgets sh
+      closeSheet(); toast(msg);
     } else {
       if (!date || !time) { toast('Укажите день и время'); return; }
       const end = f.end.value && f.end.value > time ? f.end.value : `${pad(Math.min(+time.slice(0, 2) + 1, 23))}:${time.slice(3)}`;

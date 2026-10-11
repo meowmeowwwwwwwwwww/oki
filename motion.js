@@ -581,19 +581,25 @@ addEventListener('resize', fitScreen);
 /* ---------- keyboard ---------- */
 // iPhone lays the keyboard over the page and slides the page up under the clock. Instead, the screen
 // and sheets shrink to the part left above the keyboard: the field and «Добавить» sit right on top of it.
+// In the iPhone app (ios/App.swift) the whole window ends at the keyboard instead, so only html.kb is needed there.
 const VV = window.visualViewport;
+let fullH = innerHeight; // window height without the keyboard
 function fitKeyboard() {
-  const open = VV.height < innerHeight - 120 && !!document.activeElement?.matches('input,textarea');
+  const typing = !!document.activeElement?.matches('input,textarea');
+  if (!typing) fullH = innerHeight;
+  const over = VV.height < innerHeight - 120; // Safari: the keyboard lies over the page
+  const open = typing && (over || innerHeight < fullH - 120);
   document.documentElement.classList.toggle('kb', open);
   [view, layer()].forEach(el => {
-    el.style.top = open ? VV.offsetTop + 'px' : '';
-    el.style.height = open ? VV.height + 'px' : '';
-    el.style.bottom = open ? 'auto' : '';
+    el.style.top = open && over ? VV.offsetTop + 'px' : '';
+    el.style.height = open && over ? VV.height + 'px' : '';
+    el.style.bottom = open && over ? 'auto' : '';
   });
   if (!open && (scrollY || scrollX)) scrollTo(0, 0);
 }
 if (VV) {
   VV.addEventListener('resize', fitKeyboard);
+  addEventListener('resize', fitKeyboard);
   VV.addEventListener('scroll', fitKeyboard);
   document.addEventListener('focusout', () => setTimeout(fitKeyboard, 60));
 }
