@@ -58,6 +58,8 @@ function gen(name) {
   }).join(' ');
 }
 const srcWord = k => k === 'заметки' ? 'из заметок' : k === 'вручную' ? '' : k;
+const srcAll = t => [t.source, ...(t.sources || [])].filter(Boolean);
+const srcWords = t => [...new Set(srcAll(t).map(s => srcWord(s.kind)).filter(Boolean))].join(' · ');
 
 /* ---------- rabbit (moods: ears + eyes + glow together) ---------- */
 const MOOD = {
@@ -124,7 +126,7 @@ const dock = (cur, ph) => `<div class="dock"><form class="inp" data-submit="quic
 
 function meta(t, o = {}) {
   const p = [];
-  if (t.check) p.push('<span class="q">проверьте</span>');
+  if (t.check) p.push(`<span class="q">${t.checkKind === 'done' ? (t.checkHow === 'cancel' ? 'уже не нужно?' : 'уже сделано?') : 'проверьте'}</span>`);
   if (t.done) p.push(t.doneAt ? `сделано ${dayWord(t.doneAt)}` : 'сделано');
   else if (overdue(t)) p.push(`<span class="ov">срок был ${dayWord(t.due)}</span>`);
   else if (t.due === today()) p.push(`<span class="now">${dueText(t)}</span>`);
@@ -132,7 +134,7 @@ function meta(t, o = {}) {
   if (o.group && t.group) p.push(esc(t.group));
   if (o.area) p.push(AREAS[t.area].low);
   if (t.from) p.push('от ' + esc(gen(t.from)));
-  const s = srcWord(t.source?.kind); if (s && !o.noSrc) p.push(s);
+  const s = srcWords(t); if (s && !o.noSrc) p.push(s);
   // status (glowing «сегодня», «срок был…») stands alone, the rest reads «от Ани · почта»
   const lead = p.filter(x => x.startsWith('<')), rest = p.filter(x => !x.startsWith('<'));
   return lead.join('') + (rest.length ? `<span>${rest.join(' · ')}</span>` : '');
@@ -315,16 +317,18 @@ SCREENS.task = r => {
   const n = t.items.length, k = t.items.filter(i => i.done).length, next = t.items.find(i => !i.done);
   const lbl = t.done ? `сделано ${dayWord(t.doneAt)}` : t.due ? inDays(t.due) : 'без срока';
   const ring = t.big ? `<div class="rg"><span>${RING(n ? k / n : 0)}${next ? 'Дальше: ' + esc(next.t) : 'Все пункты готовы'}</span><span>${k} из ${n}</span></div>` : '';
-  const check = t.check ? `<div class="check"><b>Проверьте</b><p>${esc(t.checkWhy || 'Сомневаюсь, что это задача.')}</p>
-    <div class="acts"><button class="pill w" data-act="confirm" data-id="${t.id}">Да, задача</button><button class="pill" data-act="not" data-id="${t.id}">Не задача</button></div></div><div class="gap"></div><div class="gap"></div>` : '';
+  const check = !t.check ? '' : t.checkKind === 'done' ? `<div class="check"><b>${t.checkHow === 'cancel' ? 'Похоже, уже не нужно' : 'Похоже, уже сделано'}</b><p>${esc((t.checkWhy || '').replace(/^Похоже[^:]*:\s*/, 'В переписке: '))}</p>
+    <div class="acts"><button class="pill w" data-act="shut" data-id="${t.id}">Закрыть задачу</button><button class="pill" data-act="confirm" data-id="${t.id}">Ещё нет</button></div></div><div class="gap"></div><div class="gap"></div>`
+    : `<div class="check"><b>Проверьте</b><p>${esc(t.checkWhy || 'Сомневаюсь, что это задача.')}</p>
+    <div class="acts"><button class="pill w" data-act="confirm" data-id="${t.id}">Да, задача</button><button class="pill" data-act="not" data-id="${t.id}">Не задача</button></div></div><div class="gap"></div><div class="gap"></div>`;
   const src = t.source || {};
   const info = `<div class="card glass">
     <div class="row2 chev"><span>Срок</span><span class="v strong">${t.due ? long(t.due) : '<span class="pill dark">Поставить срок</span>'}</span>
       <input class="over" type="date" value="${t.due || ''}" data-change="due" data-id="${t.id}" aria-label="Срок"></div>
     ${t.due ? `<div class="row2 chev"><span>Время</span><span class="v">${t.time || 'не указано'}</span><input class="over" type="time" value="${t.time || ''}" data-change="time" data-id="${t.id}" aria-label="Время"></div>` : ''}
     ${t.from ? `<div class="row2"><span>От кого</span><span class="v">${esc(t.from)}</span></div>` : ''}
-    <div class="row2"${src.quote ? ' style="border:0"' : ''}><span>Откуда</span><span class="v">${src.kind === 'вручную' ? 'добавлено вручную' : esc(src.kind)}${src.chat && src.chat !== 'Избранное' ? ' · ' + esc(src.chat) : src.chat ? ', «Избранное»' : ''}${src.date ? ', ' + dayMon(src.date) : ''}</span></div>
-    ${src.quote ? `<div class="quote">«${esc(src.quote)}»</div>` : ''}</div>`;
+    ${srcAll(t).map((src, i) => `<div class="row2"${src.quote ? ' style="border:0"' : ''}><span>${i ? '' : 'Откуда'}</span><span class="v">${src.kind === 'вручную' ? 'добавлено вручную' : esc(src.kind)}${src.chat && src.chat !== 'Избранное' ? ' · ' + esc(src.chat) : src.chat ? ', «Избранное»' : ''}${src.date ? ', ' + dayMon(src.date) : ''}</span></div>
+    ${src.quote ? `<div class="quote">«${esc(src.quote)}»</div>` : ''}`).join('')}</div>`;
   const nudge = !t.due && !t.done ? '<div class="ws" style="padding:8px 4px 0">Срока нет — без него напоминаний не будет.</div>' : '';
   const chk = `<div class="chk glass"><div class="subs">${n ? `<div class="cnt">${k} из ${n}</div>` : ''}${t.items.map((it, i) =>
     `<div class="si${it.done ? ' ok' : ''}" data-act="item" data-id="${t.id}" data-i="${i}"><i></i>${esc(it.t)}</div>`).join('')}
@@ -335,7 +339,7 @@ SCREENS.task = r => {
       ${check}${info}${nudge}<div class="gap"></div><div class="gap"></div>${chk}<div class="gap"></div><div class="gap"></div>
       <div class="acts"><button class="pill ${t.done ? '' : 'dark'}" data-act="done" data-id="${t.id}">${t.done ? 'Вернуть в работу' : 'Сделано'}</button>
         <button class="pill" data-act="move" data-id="${t.id}">Перенести в другую ${t.area === 'study' ? 'тему' : 'группу'}</button>
-        ${src.kind === 'вручную' ? `<button class="pill" data-act="del" data-id="${t.id}">Удалить</button>` : t.check ? '' : `<button class="pill" data-act="not" data-id="${t.id}">Не задача</button>`}</div>
+        ${src.kind === 'вручную' ? `<button class="pill" data-act="del" data-id="${t.id}">Удалить</button>` : t.check && t.checkKind !== 'done' ? '' : `<button class="pill" data-act="not" data-id="${t.id}">Не задача</button>`}</div>
       <div style="height:34px"></div>
       <button class="btn-main" data-act="prompt" data-id="${t.id}">${COPY}Скопировать промпт</button>
       <p class="note">Задача, нюансы и цитата — одним текстом</p>
@@ -416,7 +420,7 @@ SCREENS.archive = () => {
   const hl = s => { const e = esc(s); if (!q) return e; const i = s.toLowerCase().indexOf(q); return i < 0 ? e : esc(s.slice(0, i)) + '<mark>' + esc(s.slice(i, i + q.length)) + '</mark>' + esc(s.slice(i + q.length)); };
   const by = {}; l.forEach(x => { const d = pd(x.doneAt); (by[`${MONN[d.getMonth()]} ${d.getFullYear()}`] ||= []).push(x); });
   const body = Object.entries(by).map(([m, xs]) => grp(m.replace(` ${new Date().getFullYear()}`, ''), xs.length) + `<div class="card glass">${xs.map(x =>
-    `<div class="it2" data-go="task/${x.id}"><div class="t">${hl(x.title)}</div><div class="ws">${dayMon(x.doneAt)} · ${esc(x.group || AREAS[x.area].low)}${x.from ? ' · от ' + esc(gen(x.from)) : ''}${srcWord(x.source?.kind) ? ' · ' + srcWord(x.source.kind) : ''}</div></div>`).join('')}</div>`).join('');
+    `<div class="it2" data-go="task/${x.id}"><div class="t">${hl(x.title)}</div><div class="ws">${dayMon(x.doneAt)} · ${esc(x.group || AREAS[x.area].low)}${x.from ? ' · от ' + esc(gen(x.from)) : ''}${srcWords(x) ? ' · ' + srcWords(x) : ''}</div></div>`).join('')}</div>`).join('');
   const chips = `<div class="chips">${[['all', 'Все'], ['work', 'Работа'], ['study', 'Учёба'], ['personal', 'Личное']].map(([k, n]) =>
     `<div class="chip ${ui.arch === k ? 'on' : 'glass'}" data-act="arch" data-v="${k}">${n} <span>${cnt(k) || ''}</span></div>`).join('')}</div>`;
   return `<div class="top"><div class="nv"><button class="back" data-act="back" data-to="more">‹ Ещё</button><button class="pill" data-go="report/${ui.arch}">Отчёт</button></div>
@@ -773,6 +777,7 @@ const A = {
   fold: (el, e) => { e.stopPropagation(); ui.open[el.dataset.id] = !ui.open[el.dataset.id]; render(); },
   item: (el, e) => { e.stopPropagation(); const t = Store.task(el.dataset.id), i = +el.dataset.i; Store.act('item_done', { ref: t.id, i, done: !t.items[i].done }); },
   confirm: el => { Store.act('task_confirm', { ref: el.dataset.id }); toast('Оставлено в задачах'); },
+  shut: el => { const t = Store.task(el.dataset.id); toggleDone(t.id); toast('Задача закрыта'); back(t.area); },
   not: el => { const t = Store.task(el.dataset.id); Store.act('task_not', { ref: t.id }); toast('Убрано в «Не стало задачами»'); back(t.area); },
   move: el => openMove(Store.task(el.dataset.id)),
   del: el => { sh = { del: el.dataset.id }; confirmSheet('Удалить задачу?', 'Она исчезнет совсем, в архиве её не будет.', 'Удалить', 'del-ok'); },
@@ -790,12 +795,14 @@ const A = {
     if (el.dataset.v === 'not') collapseRow(row).then(() => { Store.act('task_not', { ref: t.id }); toast('Убрано в «Не стало задачами»'); });
   },
   prompt: async el => {
-    const t = Store.task(el.dataset.id), s = t.source || {};
+    const t = Store.task(el.dataset.id);
     const lines = ['Помоги мне с задачей.', '', `Задача: ${t.title}`];
     if (t.due) lines.push(`Срок: ${long(t.due)}${t.time ? ', ' + t.time : ''}`);
     if (t.from) lines.push(`Поручение от: ${t.from}`);
-    if (s.kind && s.kind !== 'вручную') lines.push(`Откуда: ${s.kind}${s.date ? ', ' + dayMon(s.date) : ''}`);
-    if (s.quote) lines.push(`Цитата из источника: «${s.quote}»`);
+    srcAll(t).filter(s => s.kind && s.kind !== 'вручную').forEach(s => {
+      lines.push(`Откуда: ${s.kind}${s.date ? ', ' + dayMon(s.date) : ''}`);
+      if (s.quote) lines.push(`Цитата из источника: «${s.quote}»`);
+    });
     if (t.items.length) lines.push('', 'Что нужно сделать:', ...t.items.map(i => `${i.done ? '[x]' : '[ ]'} ${i.t}`));
     toast(await copy(lines.join('\n')) ? 'Промпт скопирован' : 'Не получилось скопировать');
   },

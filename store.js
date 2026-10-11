@@ -37,13 +37,24 @@ const Store = (() => {
   // reducers: one per action type, same names the collector will understand
   const R = {
     task_new(a) { state.tasks.push(Object.assign({ id: a.ref, items: [], done: false, created: a.at, source: { kind: 'вручную', date: a.at.slice(0, 10) } }, a.task)); },
-    task_done(a) { const t = task(a.ref); t.done = a.done; t.doneAt = a.done ? a.at : null; },
+    task_done(a) { const t = task(a.ref); t.done = a.done; t.doneAt = a.done ? a.at : null; if (a.done && t.checkKind === 'done') { t.check = false; t.checkKind = null; } },
     task_due(a) { const t = task(a.ref); t.due = a.due || null; t.time = a.due ? (a.time || null) : null; },
     task_move(a) { const t = task(a.ref); t.area = a.area; t.group = a.group || null; },
     task_title(a) { task(a.ref).title = a.title; },
     task_not(a) { const t = task(a.ref); t.notTask = true; t.notAt = a.at; },
     task_back(a) { const t = task(a.ref); t.notTask = false; t.check = false; },
-    task_confirm(a) { task(a.ref).check = false; },
+    task_confirm(a) {
+      const t = task(a.ref);
+      if (t.checkKind === 'done') { t.keptOpen = a.at; t.closeWhy = t.checkWhy; } // the collector learns from «Ещё нет»
+      t.check = false; t.checkKind = null;
+    },
+    // written by the collector: the same matter came from another letter or chat — one task, both sources
+    task_source(a) {
+      const t = task(a.ref); (t.sources = t.sources || []).push(a.source);
+      (a.items || []).forEach(x => { if (!t.items.some(i => i.t === x)) t.items.push({ t: x, done: false }); });
+    },
+    // written by the Telegram collector: the chat says it is done or not needed; Даша decides
+    task_maybe_done(a) { const t = task(a.ref); if (t.done || t.notTask) return; t.check = true; t.checkKind = 'done'; t.checkHow = a.how; t.checkWhy = a.why; },
     task_delete(a) { state.tasks = state.tasks.filter(t => t.id !== a.ref); },
     item_add(a) { task(a.ref).items.push({ t: a.text, done: false }); },
     item_done(a) { task(a.ref).items[a.i].done = a.done; },
