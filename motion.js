@@ -1,7 +1,6 @@
 'use strict';
-// Oki — motion. Screens slide like on iPhone, tabs page under the finger,
-// a task swipes right for «Сделано» and left for actions, a sheet drags down to close.
-// Chosen by Даша 2026-10-11.
+// Oki — motion. Screens slide like on iPhone, tabs page under the finger, a sheet drags down to close.
+// Chosen by Даша 2026-10-11. 2026-10-12: moves land on springs like in Telegram; a task is held, not swiped, for its menu.
 
 const RM = matchMedia('(prefers-reduced-motion: reduce)');
 const EASE = 'cubic-bezier(.32,.72,0,1)'; // iOS-like: quick start, long soft landing
@@ -13,7 +12,8 @@ const W = () => view.clientWidth;
 const BG = '<div class="pbg"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i></div>';
 
 // cur: the screen on show; stack: route keys of pushed screens (mirrors browser history)
-const Nav = { cur: null, stack: [], intent: null, adopt: null, jobs: [], busy: false };
+// quiet: the address a swipe has already switched to, its own hashchange has nothing left to do
+const Nav = { cur: null, stack: [], intent: null, adopt: null, jobs: [], busy: false, quiet: null };
 
 /* ---------- dock: one input + tabs under all tab screens ---------- */
 const dockEl = document.createElement('div');
@@ -28,19 +28,19 @@ function syncDock(name, animate = true) {
   tabBtns().forEach(b => b.classList.toggle('on', b.dataset.go === name));
   placeInd(TABS.indexOf(name), animate);
 }
-// the dot under the active tab; pos is fractional while a finger pages between tabs
+// the white pill behind the active tab; pos is fractional while a finger pages between tabs.
+// Tab places are read once: reading them while a finger moves the screen would stall every frame.
+let TP = null;
 function placeInd(pos, animate) {
-  // the white pill behind the active tab
-  const b = tabBtns(), at = i => b[i].offsetLeft;
-  const i = Math.max(0, Math.min(TABS.length - 1, Math.floor(pos))), f = Math.max(0, Math.min(1, pos - i));
-  const p = at(i), q = f ? at(Math.min(i + 1, TABS.length - 1)) : p;
+  TP ||= [...tabBtns()].map(b => [b.offsetLeft, b.offsetWidth]);
+  const n = TP.length - 1, i = Math.max(0, Math.min(n, Math.floor(pos))), f = Math.max(0, Math.min(1, pos - i)), j = Math.min(i + 1, n);
   const ind = dockEl.querySelector('.ind');
   ind.style.transition = animate ? '' : 'none';
-  ind.style.width = b[i].offsetWidth + 'px';
-  ind.style.transform = `translateX(${p + (q - p) * f}px)`;
+  ind.style.width = TP[i][1] + (TP[j][1] - TP[i][1]) * f + 'px';
+  ind.style.transform = `translateX(${TP[i][0] + (TP[j][0] - TP[i][0]) * f}px)`;
 }
-new ResizeObserver(() => { view.style.setProperty('--dockh', dockEl.offsetHeight + 'px'); if (Nav.cur) syncDock(Nav.cur.r.name, false); }).observe(dockEl);
-document.fonts?.ready.then(() => Nav.cur && syncDock(Nav.cur.r.name, false));
+new ResizeObserver(() => { TP = null; view.style.setProperty('--dockh', dockEl.offsetHeight + 'px'); if (Nav.cur) syncDock(Nav.cur.r.name, false); }).observe(dockEl);
+document.fonts?.ready.then(() => { TP = null; if (Nav.cur) syncDock(Nav.cur.r.name, false); });
 
 /* ---------- panes ---------- */
 function route(h = location.hash) {
@@ -64,13 +64,14 @@ function makePane(r) {
   }
   return el;
 }
-function settle(el, r) {
+// quiet: a screen made ahead, not on show yet (the rabbit hops when it is)
+function settle(el, r, quiet) {
   const m = el.querySelector('.main');
   if (m) {
     m.scrollTop = ui.scroll[r.key] || 0;
     if (r.name === 'cal') { m.addEventListener('scroll', calScroll, { passive: true }); calScroll.call(m); }
   }
-  hop(el);
+  if (!quiet) hop(el);
 }
 function calScroll() {
   const cal = this.querySelector('.cal'), wk = this.querySelector('.wkwrap');
@@ -95,8 +96,9 @@ function back(to) {
   if (Nav.stack.length > 1) { Nav.intent = { anim: 'pop', stack: 'pop' }; history.back(); }
   else { const r = route('#/' + to); Nav.intent = { anim: 'pop', stack: 'reset' }; location.replace(r.key); }
 }
-function apply() {
-  const r = wanted();
+function apply(to) {
+  const r = to || wanted();
+  if (!to && Nav.quiet) { const q = Nav.quiet; Nav.quiet = null; if (q === r.key && !Nav.intent) return; }
   let it = Nav.intent; Nav.intent = null;
   if (Nav.cur && r.key === Nav.cur.r.key) return repaint();
   // browser back/forward: no animation of our own
@@ -114,12 +116,14 @@ function show(r, how) {
   const old = Nav.cur;
   saveScroll(old);
   const el = how === 'adopt' ? Nav.adopt : makePane(r);
+  dropPre(el);
   Nav.adopt = null;
   if (!el) { Nav.intent = { anim: 'none', stack: 'reset' }; location.replace('#/home'); return; }
   document.body.className = 'r-' + r.name;
   Nav.cur = { r, el };
   syncDock(r.name, how !== 'none');
-  if (how === 'adopt') { el.style.transform = ''; dockEl.style.transform = ''; old?.el.remove(); return; }
+  prebuild();
+  if (how === 'adopt') { el.style.transform = ''; el.style.visibility = ''; dockEl.style.transform = ''; old?.el.remove(); hop(el); return; }
   if (how === 'pop' && old) old.el.before(el); else view.append(el);
   settle(el, r);
   if (!old || how === 'none' || RM.matches) { old?.el.remove(); return; }
@@ -148,7 +152,7 @@ function repaint() {
   if (html == null) return; // e.g. the task was just deleted and the screen is leaving
   const pc = el.querySelector('.pc'), st = pc.querySelector('.main')?.scrollTop;
   const before = spots(pc);
-  Swipe.open = null;
+  dropPre(); prebuild();
   pc.innerHTML = html;
   const m = pc.querySelector('.main');
   if (m) { m.scrollTop = st || 0; if (r.name === 'cal') { m.addEventListener('scroll', calScroll, { passive: true }); calScroll.call(m); } }
@@ -168,141 +172,150 @@ function flip(root, before) {
   });
 }
 
-/* ---------- small tween for finger-driven moves ---------- */
-function tween(from, to, dur, fn, done) {
+/* ---------- springs for finger-driven moves ---------- */
+// A screen leaves the finger with the finger's own speed and comes to rest softly, like in Telegram,
+// instead of a fixed slide that ignores the flick (Даша 2026-10-12: swipes felt «деревянные»).
+// k: stiffness, z: damping (1 = no bounce), v: speed in px per ms along the value.
+const Springs = new Set();
+function spring(from, to, v, fn, done, { k = 260, z = 1, bounce = false } = {}) {
+  const job = { finish() { if (job.off) return; job.off = true; Springs.delete(job); fn(to); done?.(); } };
   // hidden page: frames don't come, so land at once instead of hanging mid-move
-  if (RM.matches || document.hidden) { fn(to); done?.(); return; }
-  const t0 = performance.now(), ease = p => 1 - Math.pow(1 - p, 3);
+  if (RM.matches || document.hidden) { job.finish(); return job; }
+  const c = 2 * z * Math.sqrt(k);
+  let x = from - to, u = v * 1000, t = performance.now();
+  // a fast flick still lands without bumping past the target: the speed is capped to what the spring can take
+  if (!bounce && x * u < 0) u = Math.sign(u) * Math.min(Math.abs(u), Math.sqrt(k) * Math.abs(x) * .95);
+  Springs.add(job);
   const step = now => {
-    const p = dur ? Math.min(1, (now - t0) / dur) : 1;
-    fn(from + (to - from) * ease(p));
-    if (p < 1) requestAnimationFrame(step); else done?.();
+    if (job.off) return;
+    const dt = Math.min(.05, Math.max(0, now - t) / 1000) / 4; t = now;
+    for (let i = 0; i < 4; i++) { u += (-k * x - c * u) * dt; x += u * dt; }
+    if (Math.abs(x) < .3 && Math.abs(u) < 12) return job.finish();
+    fn(to + x); requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
+  return job;
 }
-const durFor = (dist, v) => Math.max(180, Math.min(380, Math.abs(dist) / Math.max(Math.abs(v), 1.1)));
+const finishSprings = () => [...Springs].forEach(j => j.finish());
+// the same spring as a CSS easing, for things that pop open by themselves
+function springEase(k, z) {
+  const c = 2 * z * Math.sqrt(k), h = 1 / 240, p = [0];
+  let x = 1, u = 0;
+  for (let f = 0; f < 120; f++) {
+    for (let i = 0; i < 4; i++) { u += (-k * x - c * u) * h; x += u * h; }
+    p.push(+(1 - x).toFixed(4));
+    if (f > 6 && Math.abs(x) < .002 && Math.abs(u) < .05) break;
+  }
+  p[p.length - 1] = 1;
+  return CSS.supports?.('transition-timing-function', 'linear(0, 1)')
+    ? { easing: `linear(${p.join(',')})`, duration: Math.round((p.length - 1) * 1000 / 60) }
+    : { easing: 'cubic-bezier(.2,1.2,.3,1)', duration: 420 };
+}
+// past the last tab the screen goes heavy under the finger instead of stopping dead
+const rubber = (x, d) => Math.sign(x) * (1 - 1 / (Math.abs(x) * .55 / d + 1)) * d;
+// finger speed over the last tenth of a second; a finger that stopped before lifting has none
+function speed(pts, at) {
+  const p = pts.filter(q => at - q[0] < 100);
+  if (p.length < 2 || at - p.at(-1)[0] > 70) return 0;
+  return (p.at(-1)[1] - p[0][1]) / Math.max(8, p.at(-1)[0] - p[0][0]);
+}
+// an animation that ends even when the page is hidden and frames don't come
+const ended = (a, ms) => Promise.race([a.finished.catch(() => {}), new Promise(r => setTimeout(r, ms + 80))]);
 
-/* ---------- task row swipe ---------- */
-const Swipe = { open: null };
-const ACTW = 3 * 86;
-const rowOf = id => Nav.cur?.el.querySelector(`.task[data-tid="${id}"],.dl[data-tid="${id}"]`);
-function rowBg(row) {
-  const card = row.parentElement, t = Store.task(row.dataset.tid);
-  let bg = card.querySelector(':scope>.swbg');
-  if (bg && bg.dataset.id === t.id) return bg;
-  bg?.remove();
-  bg = document.createElement('div');
-  bg.className = 'swbg'; bg.dataset.id = t.id;
-  bg.style.top = row.offsetTop + 'px'; bg.style.height = row.offsetHeight + 'px';
-  const manual = t.source?.kind === 'вручную';
-  bg.innerHTML = `<div class="sd"><span><i></i>${t.done ? 'Вернуть' : 'Сделано'}</span></div>
-    <div class="sa"><button data-act="sw" data-v="tomorrow" data-id="${t.id}">Завтра</button><button data-act="sw" data-v="move" data-id="${t.id}">Перенести</button>${manual
-      ? `<button data-act="sw" data-v="del" data-id="${t.id}">Удалить</button>` : `<button data-act="sw" data-v="not" data-id="${t.id}">Не задача</button>`}</div>`;
-  card.prepend(bg);
-  return bg;
+/* ---------- the screens next door, made ahead ---------- */
+// Making a screen takes a moment. Made while nothing moves, they let a swipe start without a hitch.
+const Pre = { m: new Map(), t: 0 };
+function backKey() {
+  if (Nav.stack.length > 1) return Nav.stack.at(-2);
+  const b = Nav.cur?.el.querySelector('.back[data-to]');
+  return b ? route('#/' + b.dataset.to).key : null;
 }
-function setRow(row, bg, x) {
-  row.style.transform = x ? `translateX(${x}px)` : '';
-  bg.firstElementChild.style.width = Math.max(0, x) + 'px';
-  bg.lastElementChild.style.width = Math.max(0, -x) + 'px';
+function nextKeys() {
+  const r = Nav.cur?.r; if (!r) return [];
+  if (!isTab(r.name)) return [backKey()].filter(Boolean);
+  const i = TABS.indexOf(r.name);
+  return [TABS[i - 1], TABS[i + 1]].filter(Boolean).map(n => route('#/' + n).key);
 }
-const rowX = row => new DOMMatrix(getComputedStyle(row).transform).m41 || 0;
-function closeRow(then) {
-  const o = Swipe.open; Swipe.open = null;
-  if (!o) return then?.();
-  tween(rowX(o.row), 0, 240, x => setRow(o.row, o.bg, x), () => { o.row.classList.remove('swiping'); o.bg.remove(); then?.(); });
+function takePre(key) {
+  if (Pre.m.has(key)) return Pre.m.get(key);
+  const r = route(key), el = makePane(r);
+  const p = el && { el, r, tab: isTab(r.name) };
+  Pre.m.set(key, p);
+  if (!p) return null;
+  el.style.visibility = 'hidden';
+  // the screen to go back to lies under the current one; a neighbour tab lies beside it
+  if (isTab(Nav.cur.r.name)) view.append(el); else Nav.cur.el.before(el);
+  settle(el, r, true);
+  return p;
 }
-function collapseRow(row) {
-  Swipe.open = null;
-  if (!row) return Promise.resolve();
-  const h = row.offsetHeight, bg = row.parentElement.querySelector(':scope>.swbg');
-  bg?.remove();
-  if (RM.matches) return Promise.resolve();
-  const x = rowX(row);
-  row.style.transform = '';
-  return row.animate([{ height: h + 'px', opacity: 1, transform: `translateX(${x}px)` }, { height: '0px', paddingTop: 0, paddingBottom: 0, opacity: 0, borderWidth: 0, transform: `translateX(${x < 0 ? -W() : x}px)` }],
-    { duration: 280, easing: EASE, fill: 'forwards' }).finished;
+function dropPre(keep) { clearTimeout(Pre.t); Pre.m.forEach(p => { if (p && p.el !== keep) p.el.remove(); }); Pre.m.clear(); }
+function prebuild() {
+  clearTimeout(Pre.t);
+  Pre.t = setTimeout(() => {
+    if (G || Nav.busy || Nav.jobs.length || Ctx.box || document.hidden) return prebuild();
+    nextKeys().forEach(takePre);
+  }, 450);
 }
-// «Сделано» needs a long, deliberate pull: a quick flick while scrolling must not close a task (Даша 2026-10-12)
-const armAt = () => Math.min(W() * .42, 160);
+// the screen that slid in becomes the current one at once (the address follows a moment later),
+// so the next swipe can start while this one is still landing
+function adopt(p, stack) {
+  Nav.adopt = p.el; Nav.intent = { anim: 'adopt', stack };
+  apply(p.r);
+  Nav.quiet = p.r.key;
+  if (stack === 'pop') history.back(); else location.replace(p.r.key);
+}
+
+/* ---------- swipes ---------- */
 const SW = {
-  row: {
-    begin(s) {
-      if (Swipe.open && Swipe.open.row !== s.row) closeRow();
-      s.base = Swipe.open?.row === s.row ? -ACTW : 0;
-      Swipe.open = null;
-      s.bg = rowBg(s.row); s.row.classList.add('swiping');
-    },
-    drag(s, dx) {
-      let x = s.base + dx;
-      if (x < -ACTW) x = -ACTW + (x + ACTW) * .25;
-      setRow(s.row, s.bg, x);
-      const armed = x > armAt();
-      if (armed !== s.bg.classList.contains('armed')) { s.bg.classList.toggle('armed', armed); if (armed) navigator.vibrate?.(8); }
-      s.off = x;
-    },
-    end(s, v) {
-      const { row, bg } = s, x = s.off || 0;
-      const reset = then => tween(x, 0, durFor(x, v), y => setRow(row, bg, y), () => { row.classList.remove('swiping'); bg.remove(); then?.(); });
-      if (x > 0) return reset(x > armAt() ? () => {
-        const id = row.dataset.tid, was = Store.task(id).done;
-        toggleDone(id);
-        toast(was ? 'Возвращено в работу' : 'Сделано', { label: 'Вернуть', fn: () => toggleDone(id) });
-      } : null);
-      if (x < -ACTW / 2 || (v < -.4 && x < -30)) { Swipe.open = { row, bg }; tween(x, -ACTW, durFor(x + ACTW, v), y => setRow(row, bg, y)); }
-      else reset();
-    },
-  },
-  // page between tabs: the neighbour tab slides in next to the current one
+  // page between tabs, anywhere on the screen: the neighbour tab slides in next to the current one
   page: {
-    begin(s) { s.i = TABS.indexOf(Nav.cur.r.name); s.nb = {}; },
+    begin(s) { s.i = TABS.indexOf(Nav.cur.r.name); s.nb = {}; s.w = W(); },
     drag(s, dx) {
-      const w = W(), dir = dx < 0 ? 1 : -1, j = s.i + dir;
+      const w = s.w, dir = dx < 0 ? 1 : -1, j = s.i + dir;
       let x = dx;
-      if (j < 0 || j >= TABS.length) x = dx * .25;
-      else if (!s.nb[dir]) { const r = route('#/' + TABS[j]), el = makePane(r); view.append(el); settle(el, r); s.nb[dir] = { el, r }; }
-      const other = s.nb[-dir]; if (other) other.el.style.visibility = 'hidden';
-      const n = s.nb[dir]; if (n) { n.el.style.visibility = ''; n.el.style.transform = `translateX(${x + dir * w}px)`; }
+      if (j < 0 || j >= TABS.length) x = rubber(dx, w);
+      else if (!(dir in s.nb)) s.nb[dir] = takePre(route('#/' + TABS[j]).key);
+      for (const d of [1, -1]) if (s.nb[d]) s.nb[d].el.style.visibility = d === dir ? '' : 'hidden';
+      const n = s.nb[dir]; if (n) n.el.style.transform = `translateX(${x + dir * w}px)`;
       Nav.cur.el.style.transform = `translateX(${x}px)`;
       placeInd(s.i - x / w, false);
       s.off = x; s.dir = dir;
     },
     end(s, v) {
-      const w = W(), x = s.off || 0, n = s.nb[s.dir], cur = Nav.cur;
-      const go = n && (Math.abs(x) > w * .28 || (Math.abs(v) > .35 && Math.sign(v) === Math.sign(x)));
+      const w = s.w, x = s.off || 0, n = s.nb[s.dir], cur = Nav.cur;
+      // a flick decides by its direction, a slow drag by how far it went
+      const go = !!n && (Math.abs(v) > .25 ? Math.sign(v) === Math.sign(x) : Math.abs(x) > w * .4);
       const to = go ? -s.dir * w : 0;
       const move = y => { cur.el.style.transform = `translateX(${y}px)`; if (n) n.el.style.transform = `translateX(${y + s.dir * w}px)`; placeInd(s.i - y / w, false); };
       if (go) document.body.className = 'r-' + n.r.name;
       Nav.busy = true;
-      tween(x, to, durFor(to - x, v), move, () => {
+      spring(x, to, v, move, () => {
         Nav.busy = false;
-        Object.values(s.nb).forEach(o => { if (!go || o !== n) o.el.remove(); });
-        if (!go) { cur.el.style.transform = ''; return; }
-        saveScroll(cur);
-        Nav.adopt = n.el; Nav.intent = { anim: 'adopt', stack: 'reset' };
-        location.replace(n.r.key);
-      });
+        if (go) { saveScroll(cur); return adopt(n, 'reset'); }
+        cur.el.style.transform = '';
+        Object.values(s.nb).forEach(o => { if (o) { o.el.style.visibility = 'hidden'; o.el.style.transform = ''; } });
+      }, { k: 300 });
     },
   },
   // swipe right on a pushed screen: go back, the previous screen follows the finger
   back: {
     begin(s) {
-      const key = Nav.stack.length > 1 ? Nav.stack.at(-2) : '#/' + Nav.cur.el.querySelector('.back[data-to]').dataset.to;
-      const r = route(key), el = makePane(r);
-      Nav.cur.el.before(el); settle(el, r);
-      s.under = { el, r, tab: isTab(r.name) };
-      if (s.under.tab) syncDock(r.name, false);
+      const k = backKey(), u = k && takePre(k);
+      if (!u) return false;
+      s.w = W(); s.under = u;
+      u.el.style.visibility = '';
+      if (u.tab) syncDock(u.r.name, false);
     },
     drag(s, dx) {
-      const w = W(), x = Math.max(0, dx), u = `translateX(${-w * .3 * (1 - x / w)}px)`;
+      const w = s.w, x = Math.max(0, dx), t = `translateX(${-w * .3 * (1 - x / w)}px)`;
       Nav.cur.el.style.transform = `translateX(${x}px)`;
-      s.under.el.style.transform = u;
-      if (s.under.tab) dockEl.style.transform = u;
+      s.under.el.style.transform = t;
+      if (s.under.tab) dockEl.style.transform = t;
       s.off = x;
     },
     end(s, v) {
-      const w = W(), x = s.off || 0, cur = Nav.cur, u = s.under;
-      const go = x > w * .35 || (v > .4 && x > 30);
+      const w = s.w, x = s.off || 0, cur = Nav.cur, u = s.under;
+      const go = Math.abs(v) > .25 ? v > 0 : x > w * .4;
       const move = y => {
         cur.el.style.transform = `translateX(${y}px)`;
         const t = `translateX(${-w * .3 * (1 - y / w)}px)`;
@@ -310,13 +323,13 @@ const SW = {
       };
       if (go) document.body.className = 'r-' + u.r.name;
       Nav.busy = true;
-      tween(x, go ? w : 0, durFor((go ? w : 0) - x, v), move, () => {
+      spring(x, go ? w : 0, v, move, () => {
         Nav.busy = false;
-        if (!go) { u.el.remove(); cur.el.style.transform = ''; dockEl.style.transform = ''; syncDock(cur.r.name, false); return; }
-        Nav.adopt = u.el;
-        if (Nav.stack.length > 1) { Nav.intent = { anim: 'adopt', stack: 'pop' }; history.back(); }
-        else { Nav.intent = { anim: 'adopt', stack: 'reset' }; location.replace(u.r.key); }
-      });
+        if (go) return adopt(u, Nav.stack.length > 1 ? 'pop' : 'reset');
+        u.el.style.visibility = 'hidden'; u.el.style.transform = '';
+        cur.el.style.transform = ''; dockEl.style.transform = '';
+        syncDock(cur.r.name, false);
+      }, { k: 280 });
     },
   },
 };
@@ -328,44 +341,40 @@ window.addEventListener('pointerdown', () => { eatClick = false; }, true);
 view.addEventListener('pointerdown', e => {
   eatClick = false;
   G = null; // a lost release must never block the next touch
-  if (e.button > 0 || !e.isPrimary || Nav.busy) return;
-  const t = e.target;
-  if (t.closest('.swbg')) return;
-  // a tap anywhere closes an open row, like on iPhone
-  if (Swipe.open) { closeRow(); eatClick = true; return; }
-  if (t.closest('input,textarea,select,.chips,.mic')) return;
+  if (e.button > 0 || !e.isPrimary) return;
+  let t = e.target;
+  // a touch while a screen is still landing: land it now and take this touch as a fresh start
+  if (Nav.busy) { finishSprings(); t = document.elementFromPoint(e.clientX, e.clientY) || t; }
+  if (Nav.busy || t.closest('input,textarea,select,.chips,.mic')) return;
   if (!Nav.cur || !(Nav.cur.el.contains(t) || dockEl.contains(t))) return;
   finishJobs();
-  G = { x: e.clientX, y: e.clientY, id: e.pointerId, row: t.closest('.task[data-tid],.dl[data-tid]'), mode: null, pts: [] };
+  G = { x: e.clientX, y: e.clientY, id: e.pointerId, mode: null, pts: [] };
+  holdStart(t, e);
 });
 window.addEventListener('pointermove', e => {
   const s = G; if (!s || e.pointerId !== s.id) return;
   const dx = e.clientX - s.x, dy = e.clientY - s.y;
-  s.pts.push([e.timeStamp, e.clientX]); if (s.pts.length > 6) s.pts.shift();
+  s.pts.push([e.timeStamp, e.clientX]); if (s.pts.length > 12) s.pts.shift();
   if (!s.mode) {
-    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-    if (Math.abs(dx) < Math.abs(dy) * 1.2) { G = null; return; }
-    // a task row moves only for a clearly sideways finger, not for a slanted scroll
-    if (s.row && isTab(Nav.cur.r.name) && (Math.abs(dx) < Math.abs(dy) * 2 || Math.abs(dx) < 16)) { if (Math.abs(dx) >= 16 || Math.abs(dy) >= 16) G = null; return; }
-    const full = !isTab(Nav.cur.r.name);
-    if (full) {
-      const canBack = Nav.stack.length > 1 || Nav.cur.el.querySelector('.back[data-to]');
-      if (dx < 0 || !canBack) { G = null; return; }
-      s.mode = 'back';
-    } else s.mode = s.row && Nav.cur.el.contains(s.row) ? 'row' : 'page';
-    s.x += Math.sign(dx) * 10; // start from the finger, without a jump
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+    holdCancel();
+    // mostly up or down: that is scrolling, the list takes it
+    if (Math.abs(dx) < Math.abs(dy) * 1.3) { G = null; return; }
+    if (isTab(Nav.cur.r.name)) s.mode = 'page';
+    else if (dx > 0 && backKey()) s.mode = 'back';
+    else { G = null; return; }
+    s.x += Math.sign(dx) * 8; // start from the finger, without a jump
     eatClick = true;
-    SW[s.mode].begin(s);
+    if (SW[s.mode].begin(s) === false) { G = null; return; }
   }
   SW[s.mode].drag(s, e.clientX - s.x);
 }, { passive: true });
 function release(e, cancel) {
+  if (e.pointerId === Hold.pid) holdCancel();
   const s = G; if (!s || e.pointerId !== s.id) return;
   G = null;
   if (!s.mode) return;
-  const p = s.pts, a = p[0], b = p.at(-1);
-  const v = !cancel && p.length > 1 && b[0] > a[0] ? (b[1] - a[1]) / (b[0] - a[0]) : 0;
-  SW[s.mode].end(s, v);
+  SW[s.mode].end(s, cancel ? 0 : speed(s.pts, e.timeStamp));
 }
 window.addEventListener('pointerup', e => release(e, false));
 window.addEventListener('pointercancel', e => release(e, true));
@@ -374,6 +383,148 @@ document.addEventListener('click', e => { if (eatClick) { eatClick = false; e.st
 document.addEventListener('touchstart', () => {}, { passive: true });
 // no pinch zoom (Safari ignores user-scalable=no; the iPhone shell respects it)
 ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+document.addEventListener('contextmenu', e => { if (e.target.closest('.task,.dl,.big,#ctx')) e.preventDefault(); });
+
+/* ---------- long press on a task: its menu, like in Telegram ---------- */
+// Instead of swiping a task (Даша 2026-10-12): hold it, the task lifts above a blurred screen
+// with its actions under it. Keep the finger down and slide onto an action to pick it in one move.
+const Hold = { t: 0, row: null, pid: null };
+function holdStart(t, e) {
+  const row = t.closest('.task[data-tid],.dl[data-tid],.big[data-bid]');
+  if (!row || !Nav.cur.el.contains(row)) return;
+  Hold.row = row; Hold.pid = e.pointerId; Hold.x = e.clientX; Hold.y = e.clientY;
+  row.classList.add('press');
+  Hold.t = setTimeout(() => {
+    const r = Hold.row; Hold.t = 0; Hold.row = null;
+    if (!r || G?.mode) return;
+    G = null; eatClick = true;
+    ctxOpen(r, Hold.pid);
+  }, 400);
+}
+function holdCancel() {
+  clearTimeout(Hold.t); Hold.t = 0;
+  Hold.row?.classList.remove('press'); Hold.row = null;
+}
+
+const Ctx = { box: null };
+const rowOf = id => Nav.cur?.el.querySelector(`.task[data-tid="${id}"],.dl[data-tid="${id}"]`);
+// a task leaving the list folds away instead of vanishing
+function collapseRow(row) {
+  if (!row || RM.matches) return Promise.resolve();
+  const h = row.offsetHeight;
+  return ended(row.animate([{ height: h + 'px', opacity: 1 }, { height: '0px', paddingTop: 0, paddingBottom: 0, opacity: 0, borderWidth: 0 }],
+    { duration: 280, easing: EASE, fill: 'forwards' }), 280);
+}
+const CI = {
+  done: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  undo: '<path d="M9 5.5 4.5 10 9 14.5"/><path d="M5 10h9a5 5 0 0 1 0 10h-3"/>',
+  edit: '<path d="M4.5 19.5l1-4.5L15.8 4.7a2.1 2.1 0 0 1 3 3L8.5 18z"/><path d="M13.8 6.7l3 3"/>',
+  later: '<rect x="4" y="5.5" width="16" height="14.5" rx="3"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
+  move: '<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+  copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/>',
+  not: '<circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/>',
+  del: '<path d="M4.5 7h15M10 4h4M6.5 7l1 12.5h9l1-12.5M10.5 11v5M13.5 11v5"/>',
+};
+function ctxItems(t) {
+  const it = (c, label, ico) => `<button type="button" class="ci" data-c="${c}" role="menuitem"><span>${label}</span><svg viewBox="0 0 24 24">${CI[ico]}</svg></button>`;
+  const end = t.source?.kind === 'вручную' ? it('del', 'Удалить', 'del') : t.check && t.checkKind !== 'done' ? '' : it('not', 'Не задача', 'not');
+  return it('done', t.done ? 'Вернуть в работу' : 'Сделано', t.done ? 'undo' : 'done')
+    + it('edit', 'Изменить', 'edit')
+    + (t.done ? '' : it('later', t.due === addDays(today(), 1) ? 'На послезавтра' : 'На завтра', 'later'))
+    + it('move', `В другую ${t.area === 'study' ? 'тему' : 'группу'}`, 'move')
+    + it('prompt', 'Скопировать промпт', 'copy')
+    + (end ? '<i class="cgap"></i>' + end : '');
+}
+function ctxOpen(row, pid) {
+  const id = row.dataset.tid || row.dataset.bid, t = Store.task(id);
+  row.style.transition = 'none'; row.classList.remove('press');
+  if (!t) { row.style.transition = ''; return; }
+  const r = row.getBoundingClientRect(), big = row.classList.contains('big');
+  row.style.transition = '';
+  const box = document.createElement('div');
+  box.id = 'ctx';
+  box.innerHTML = `<div class="cdim"></div><div class="cprev${big ? '' : ' glass'}"></div><div class="cmenu" role="menu">${ctxItems(t)}</div>`;
+  const dim = box.querySelector('.cdim'), prev = box.querySelector('.cprev'), menu = box.querySelector('.cmenu');
+  const copy = row.cloneNode(true);
+  [copy, ...copy.querySelectorAll('[data-act],[data-go]')].forEach(x => { x.removeAttribute('data-act'); x.removeAttribute('data-go'); });
+  copy.classList.remove('pop');
+  prev.append(copy);
+  Object.assign(prev.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px' });
+  document.body.append(box);
+  // the task and its menu fit between the clock and the bottom edge; the task moves up when it must
+  const ps = getComputedStyle($('#satprobe'));
+  const lo = Math.max(parseFloat(ps.paddingTop) || 0, 14) + 8, hi = innerHeight - Math.max(parseFloat(ps.paddingBottom) || 0, 14) - 8, gap = 10;
+  const mh = menu.offsetHeight, mw = menu.offsetWidth;
+  if (prev.offsetHeight > hi - lo - gap - mh) prev.style.maxHeight = Math.max(60, hi - lo - gap - mh) + 'px';
+  const ph = prev.offsetHeight, top = Math.max(lo, Math.min(r.top, hi - ph - gap - mh)), dy = top - r.top;
+  const vr = view.getBoundingClientRect(), left = Math.max(vr.left + 12, Math.min(r.left, vr.right - mw - 12));
+  Object.assign(menu.style, { left: left + 'px', top: top + ph + gap + 'px', transformOrigin: `${Math.min(mw, r.width) / 2}px 0` });
+  row.style.visibility = 'hidden';
+  // the list under the finger must not scroll while the finger slides over the menu
+  // (held only for this one touch: a standing listener like this would make every scroll wait)
+  const main = Nav.cur.el.querySelector('.main'); if (main) main.style.overflowY = 'hidden';
+  document.addEventListener('touchmove', noScroll, { passive: false });
+  Object.assign(Ctx, { box, dim, prev, menu, row, id, dy, main, pid, slide: true, moved: false, x: Hold.x, y: Hold.y });
+  prev.style.transform = `translateY(${dy}px)`;
+  const pop = springEase(320, .78), lift = springEase(260, .9);
+  dim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
+  prev.animate([{ transform: 'translateY(0) scale(.97)' }, { transform: `translateY(${dy}px)` }], lift);
+  menu.animate([{ transform: 'scale(.25)' }, { transform: 'none' }], pop);
+  menu.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'linear' });
+}
+function ctxClose(then) {
+  const c = Ctx.box && { ...Ctx };
+  if (!c) return then?.();
+  slideEnd(); Ctx.box = null;
+  c.box.classList.add('off');
+  c.menu.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(.5)' }], { duration: 170, easing: 'ease-in', fill: 'forwards' });
+  c.dim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 280, easing: 'ease', fill: 'forwards' });
+  ended(c.prev.animate([{ transform: `translateY(${c.dy}px)` }, { transform: 'none' }], { duration: 320, easing: EASE, fill: 'forwards' }), 320).then(() => {
+    c.row.style.visibility = ''; if (c.main) c.main.style.overflowY = '';
+    c.box.remove(); then?.();
+  });
+}
+function ctxPick(c) {
+  const t = Store.task(Ctx.id);
+  if (!t) return ctxClose();
+  // copying needs the finger's own moment: Safari refuses the clipboard a beat later
+  if (c === 'prompt') { A.prompt({ dataset: { id: t.id } }); return ctxClose(); }
+  ctxClose({
+    done: () => { const was = t.done; toggleDone(t.id); toast(was ? 'Возвращено в работу' : 'Сделано', { label: 'Вернуть', fn: () => toggleDone(t.id) }); },
+    edit: () => openEdit(t),
+    later: () => { const d = addDays(today(), t.due === addDays(today(), 1) ? 2 : 1); Store.act('task_due', { ref: t.id, due: d, time: t.time }); toast(`Перенесено на ${dayWord(d)}`); },
+    move: () => openMove(t),
+    not: () => collapseRow(rowOf(t.id)).then(() => { Store.act('task_not', { ref: t.id }); toast('Убрано в «Не стало задачами»'); }),
+    del: () => { sh = { del: t.id }; confirmSheet('Удалить задачу?', 'Она исчезнет совсем, в архиве её не будет.', 'Удалить', 'del-ok'); },
+  }[c]);
+}
+document.addEventListener('click', e => {
+  if (!Ctx.box || !Ctx.box.contains(e.target)) return;
+  const b = e.target.closest('.ci');
+  if (b) return ctxPick(b.dataset.c);
+  // a tap on the lifted task opens it, a tap anywhere else just closes the menu
+  if (e.target.closest('.cprev')) { const id = Ctx.id; return ctxClose(() => go('task/' + id)); }
+  ctxClose();
+});
+// the finger that opened the menu slides over it: the action under it lights up and is picked on release.
+// Only after a real slide: the menu may open right under a resting finger, and lifting it must pick nothing.
+const noScroll = e => e.preventDefault();
+function slideEnd() { Ctx.slide = false; document.removeEventListener('touchmove', noScroll, { passive: false }); }
+const ctxAt = e => document.elementFromPoint(e.clientX, e.clientY)?.closest('#ctx .ci');
+window.addEventListener('pointermove', e => {
+  if (!Ctx.box || !Ctx.slide || e.pointerId !== Ctx.pid) return;
+  if (!Ctx.moved && Math.hypot(e.clientX - Ctx.x, e.clientY - Ctx.y) < 10) return;
+  Ctx.moved = true;
+  const b = ctxAt(e);
+  Ctx.menu.querySelectorAll('.ci').forEach(x => x.classList.toggle('hl', x === b));
+}, { passive: true });
+window.addEventListener('pointerup', e => {
+  if (!Ctx.box || !Ctx.slide || e.pointerId !== Ctx.pid) return;
+  slideEnd();
+  const b = Ctx.moved && ctxAt(e);
+  if (b) ctxPick(b.dataset.c);
+});
+window.addEventListener('pointercancel', e => { if (Ctx.box && e.pointerId === Ctx.pid) { slideEnd(); Ctx.menu.querySelectorAll('.hl').forEach(x => x.classList.remove('hl')); } });
 
 /* ---------- sheet: drag down to close ---------- */
 let SG = null;
@@ -445,12 +596,12 @@ if (VV) {
 }
 
 /* ---------- start ---------- */
-window.addEventListener('hashchange', apply);
+window.addEventListener('hashchange', () => apply());
 Store.on(render);
 Store.load();
 apply();
 // minutes and day change: refresh «через 40 мин», greetings, «сегодня»
-const idle = () => !document.hidden && !layer().classList.contains('on') && !G && !Swipe.open && !Nav.busy && !Nav.jobs.length;
+const idle = () => !document.hidden && !layer().classList.contains('on') && !G && !Ctx.box && !Nav.busy && !Nav.jobs.length;
 setInterval(() => { if (idle() && !document.activeElement?.matches('input,textarea')) render(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (idle()) render(); });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});

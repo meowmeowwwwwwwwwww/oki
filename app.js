@@ -826,14 +826,6 @@ const A = {
     const kill = () => { Store.act('task_delete', { ref: t.id }); toast('Удалено'); };
     if (row) collapseRow(row).then(kill); else { kill(); back(t.area); }
   },
-  // buttons revealed by swiping a task to the left
-  sw: el => {
-    const t = Store.task(el.dataset.id), row = rowOf(t.id);
-    if (el.dataset.v === 'tomorrow') closeRow(() => { Store.act('task_due', { ref: t.id, due: addDays(today(), 1), time: t.time }); toast('Перенесено на завтра'); });
-    if (el.dataset.v === 'move') closeRow(() => openMove(t));
-    if (el.dataset.v === 'del') { sh = { del: t.id }; confirmSheet('Удалить задачу?', 'Она исчезнет совсем, в архиве её не будет.', 'Удалить', 'del-ok'); }
-    if (el.dataset.v === 'not') collapseRow(row).then(() => { Store.act('task_not', { ref: t.id }); toast('Убрано в «Не стало задачами»'); });
-  },
   prompt: async el => {
     const t = Store.task(el.dataset.id);
     const lines = ['Помоги мне с задачей.', '', `Задача: ${t.title}`];

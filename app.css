@@ -344,19 +344,19 @@ a.btn-main,a.btn-ghost{text-decoration:none}
 #toast:not(.on){pointer-events:none}
 #toast button{height:32px;padding:0 14px;border-radius:16px;background:rgba(255,255,255,.16);color:#fff;font-size:14px}
 
-/* swipe a task: right = done (ink), left = actions (lavender → ink) */
-.swiping{position:relative;z-index:1}
-.swbg{position:absolute;left:0;right:0;z-index:0}
-.swbg .sd{position:absolute;left:0;top:0;bottom:0;width:0;overflow:hidden;background:var(--ink);color:#fff;display:flex;align-items:center;font-size:14px;white-space:nowrap}
-.swbg .sd span{display:flex;align-items:center;gap:10px;padding-left:16px;transition:transform .2s cubic-bezier(.3,1.6,.5,1)}
-.swbg .sd i{width:20px;height:20px;border-radius:50%;border:1.3px solid #fff;flex:none;transition:background .15s,box-shadow .2s}
-.swbg.armed .sd span{transform:scale(1.06)}
-.swbg.armed .sd i{background:#fff;box-shadow:inset 0 0 0 4px var(--ink),0 0 14px var(--lav)}
-.swbg .sa{position:absolute;right:0;top:0;bottom:0;width:0;overflow:hidden;display:flex}
-.swbg .sa button{flex:1 1 0;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;color:var(--ink)}
-.swbg .sa button:nth-child(1){background:var(--lav2)}
-.swbg .sa button:nth-child(2){background:var(--lav)}
-.swbg .sa button:nth-child(3){background:var(--ink);color:#fff}
+/* long press on a task (motion.js): the task lifts over a blurred screen with its actions under it, like in Telegram */
+#ctx{position:fixed;inset:0;z-index:75;touch-action:none}
+#ctx.off{pointer-events:none}
+.cdim{position:absolute;inset:0;background:rgba(233,235,240,.5);backdrop-filter:blur(14px) saturate(1.1);-webkit-backdrop-filter:blur(14px) saturate(1.1)}
+.cprev{position:absolute;border-radius:24px;overflow:hidden;box-shadow:0 18px 50px rgba(60,66,120,.2)}
+.cprev.glass{border-radius:22px;background:rgba(255,255,255,.8)}
+.cmenu{position:absolute;width:250px;border-radius:18px;overflow:hidden;background:rgba(255,255,255,.86);
+  backdrop-filter:blur(24px) saturate(1.3);-webkit-backdrop-filter:blur(24px) saturate(1.3);border:1px solid rgba(255,255,255,.9);box-shadow:0 18px 50px rgba(60,66,120,.2)}
+.ci{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;height:46px;padding:0 14px 0 16px;font-size:15.5px;letter-spacing:-.01em;text-align:left;border-bottom:1px solid var(--line);transition:background-color .12s}
+.ci:last-child,.ci:has(+.cgap){border:0}
+.ci svg{width:22px;height:22px;flex:none;fill:none;stroke:var(--ink);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ci:active,.ci.hl{background-color:rgba(17,19,23,.07)}
+.cgap{display:block;height:7px;background:rgba(17,19,23,.06)}
 
 /* rabbit: a little hop and a flash of glow when a task is done */
 .hop{transform-origin:50% 100%;animation:hop .8s ease}
@@ -376,11 +376,13 @@ button,.chip,.pill,[data-go],[data-act],input,textarea{touch-action:pan-x pan-y}
 .task,.dl,.row2,.it2,.near,.big,.mt{transition:background-color .2s}
 .task:active,.dl:active,.row2[data-go]:active,.row2[data-act]:active,.it2[data-go]:active,.mt:active,.dn:active{background-color:rgba(255,255,255,.35)}
 .near:active,.big:active{background-color:rgba(255,255,255,.66)}
-.swiping:active{background-color:transparent}
+/* a held task sinks a little under the finger before its menu opens */
+.task,.dl,.big{transition:background-color .2s,transform .3s cubic-bezier(.2,.8,.2,1)}
+.task.press,.dl.press,.big.press{transform:scale(.97);transition:background-color .2s,transform .34s cubic-bezier(.4,0,.6,1) .06s}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-#satprobe{position:fixed;top:0;left:0;width:0;height:0;padding-top:env(safe-area-inset-top);visibility:hidden;pointer-events:none}
+#satprobe{position:fixed;top:0;left:0;width:0;height:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden;pointer-events:none}
 /* see-through status bar on iPhone (html.short, set in motion.js): iPhone keeps the bottom strip for itself
    and paints it plain mist, so the page fades into that colour and needs no room for the home bar */
 html.short{--sb:10px}
