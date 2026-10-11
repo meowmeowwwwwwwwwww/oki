@@ -557,7 +557,7 @@ SCREENS.tg = r => {
   const sm = (h, p, body, btn, busy, extra = '') => `<form class="onb sm" data-submit="tg${step}">${tgBack}<div class="rb">${RABBIT('calm', '', true)}</div>
     <h1>${h}</h1><p>${p}</p>${body}<div class="bt"><button class="btn-main" type="submit" data-busy="${busy}">${btn}</button>${extra}</div></form>`;
   if (step === 'site') return `<div class="onb sm">${tgBack}<div class="rb">${RABBIT('calm', '', true)}</div>
-    <h1>Сначала — ключи<br>от Telegram</h1><p>Их выдаёт сайт Telegram. Войдите по номеру: код придёт в Telegram. Откройте <b>API development tools</b>, впишите App title <b>Oki</b>, Short name <b>oki</b>, платформа — любая, и нажмите <b>Create application</b>.</p>
+    <h1>Сначала — ключи<br>от Telegram</h1><p>Их выдаёт сайт Telegram. Войдите по номеру: код придёт в Telegram. Откройте <b>API development tools</b>, впишите App title <b>Oki Assistant</b>, Short name <b>okiassistant</b>, платформа — любая, и нажмите <b>Create application</b>.</p>
     <div class="bt"><a class="btn-main" href="${TG_SITE}" target="_blank" rel="noopener" data-act="tgopen">Открыть сайт Telegram</a><button class="btn-ghost" data-go="tg/keys" style="margin-top:8px">Ключи уже есть</button></div></div>`;
   if (step === 'keys') return sm('Вставьте два ключа', 'Они на той же странице. <b>App api_id</b> — это число, <b>App api_hash</b> — длинная строка из букв и цифр.',
     keyField('id', 'App api_id') + keyField('hash', 'App api_hash'), 'Дальше', 'Проверяю…');
