@@ -185,6 +185,11 @@ SCREENS.home = () => {
   const hi = h < 5 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер';
   const name = esc(S().settings.name);
   const saved = S().savedAt ? S().savedAt.slice(11, 16) : '';
+  if (tgState().bad) return `<div class="top"><div class="hhd"><span class="logo" style="font-size:26px;letter-spacing:-.04em">Oki</span>
+      <span class="r"><button class="menu glass" data-go="more" aria-label="Ещё"><i></i></button></span></div></div>
+    <div class="home-main"><div class="stage">${RABBIT('sad', '', true)}</div>
+      <div class="broke"><h1>Telegram отключился</h1><p>${Sync.tg.status.ok_at ? `С ${hmWhen(Sync.tg.status.ok_at)} я` : 'Я'} не вижу новые сообщения, задачи из чатов не приходят. Почта работает.</p>
+      <button class="btn-main" data-go="tg">Войти заново</button></div></div>`;
   return `<div class="top"><div class="hhd"><span class="logo" style="font-size:26px;letter-spacing:-.04em">Oki</span>
       <span class="r">${saved ? `<span class="st"><i></i>сохранено ${saved}</span>` : ''}<button class="menu glass" data-go="more" aria-label="Ещё"><i></i></button></span></div></div>
     <div class="home-main">
@@ -318,7 +323,7 @@ SCREENS.task = r => {
       <input class="over" type="date" value="${t.due || ''}" data-change="due" data-id="${t.id}" aria-label="Срок"></div>
     ${t.due ? `<div class="row2 chev"><span>Время</span><span class="v">${t.time || 'не указано'}</span><input class="over" type="time" value="${t.time || ''}" data-change="time" data-id="${t.id}" aria-label="Время"></div>` : ''}
     ${t.from ? `<div class="row2"><span>От кого</span><span class="v">${esc(t.from)}</span></div>` : ''}
-    <div class="row2"${src.quote ? ' style="border:0"' : ''}><span>Откуда</span><span class="v">${src.kind === 'вручную' ? 'добавлено вручную' : esc(src.kind)}${src.date ? ', ' + dayMon(src.date) : ''}</span></div>
+    <div class="row2"${src.quote ? ' style="border:0"' : ''}><span>Откуда</span><span class="v">${src.kind === 'вручную' ? 'добавлено вручную' : esc(src.kind)}${src.chat && src.chat !== 'Избранное' ? ' · ' + esc(src.chat) : src.chat ? ', «Избранное»' : ''}${src.date ? ', ' + dayMon(src.date) : ''}</span></div>
     ${src.quote ? `<div class="quote">«${esc(src.quote)}»</div>` : ''}</div>`;
   const nudge = !t.due && !t.done ? '<div class="ws" style="padding:8px 4px 0">Срока нет — без него напоминаний не будет.</div>' : '';
   const chk = `<div class="chk glass"><div class="subs">${n ? `<div class="cnt">${k} из ${n}</div>` : ''}${t.items.map((it, i) =>
@@ -455,25 +460,42 @@ function storageCard() {
 // «Сбор задач» (design: final.html settings): what the mail collector on GitHub last reported
 const MAIL_BOX = { auth: 'Яндекс не пускает в ящик: пароль приложения удалён или сменился.', nokey: 'Нет пароля от ящика.', offline: 'Не получилось связаться с почтой. Попробую через полчаса.' };
 const MAIL_NOTE = { limit: 'Нейросеть исчерпала бесплатный лимит на сегодня. Остальное разберу завтра утром.', ai: 'Нейросеть не ответила. Повторю через полчаса.', more: 'Писем много — разбираю по частям.' };
+const hmWhen = s => { const at = new Date(s); return `${iso(at) === today() ? '' : dayWord(iso(at)) + ', '}${pad(at.getHours())}:${pad(at.getMinutes())}`; };
 function collectCard() {
   const m = Sync.mail?.status;
-  if (!m) return `<div class="card glass">${row2('<span class="dotok"></span>Почта', 'ещё не проверялась')}
-    <div class="txt" style="padding-top:2px">Как только программа на GitHub проверит почту, здесь появится время проверки.</div></div>`;
-  const at = new Date(m.at), mins = (Date.now() - at) / 6e4, h = new Date().getHours();
-  const when = `${iso(at) === today() ? '' : dayWord(iso(at)) + ', '}${pad(at.getHours())}:${pad(at.getMinutes())}`;
-  const bad = Object.entries(m.boxes || {}).filter(([, v]) => v !== 'ok');
-  const stale = mins > 120 && h >= 9 && h < 23; // runs every half hour from 7 to 23:30
-  const lines = [...bad.map(([a, v]) => `<b>${esc(a)}</b>. ${MAIL_BOX[v] || MAIL_BOX.offline}`),
-    ...(MAIL_NOTE[m.note] ? [MAIL_NOTE[m.note]] : []), ...(stale ? ['Почта давно не проверялась: похоже, программа на GitHub остановилась.'] : [])];
-  const fallback = m.model && !m.model.startsWith('qwen/') ? row2('Нейросеть', 'запасная') : '';
-  return `<div class="card glass">${row2(`<span class="${bad.length || stale ? 'dotbad' : 'dotok'}"></span>Почта`, `проверено ${when}`)}
+  let mailRow, lines = [], fallback = '';
+  if (!m) {
+    mailRow = row2('<span class="dotok"></span>Почта', 'ещё не проверялась');
+    lines.push('Как только программа на GitHub проверит почту, здесь появится время проверки.');
+  } else {
+    const mins = (Date.now() - new Date(m.at)) / 6e4, h = new Date().getHours();
+    const bad = Object.entries(m.boxes || {}).filter(([, v]) => v !== 'ok');
+    const stale = mins > 120 && h >= 9 && h < 23; // runs every half hour from 7 to 23:30
+    lines = [...bad.map(([a, v]) => `<b>${esc(a)}</b>. ${MAIL_BOX[v] || MAIL_BOX.offline}`),
+      ...(MAIL_NOTE[m.note] ? [MAIL_NOTE[m.note]] : []), ...(stale ? ['Почта давно не проверялась: похоже, программа на GitHub остановилась.'] : [])];
+    fallback = m.model && !m.model.startsWith('qwen/') ? row2('Нейросеть', 'запасная') : '';
+    mailRow = row2(`<span class="${bad.length || stale ? 'dotbad' : 'dotok'}"></span>Почта`, `проверено ${hmWhen(m.at)}`);
+  }
+  const t = tgState();
+  if (t.line) lines.push(t.line);
+  return `<div class="card glass">${mailRow}${t.row}
     ${lines.length ? `<div class="it2"><div class="t">${lines.join('<br>')}</div></div>` : ''}${fallback}
     ${row2('Проверить сейчас', '', { chev: 1, act: 'collect' })}</div>`;
+}
+// Telegram's row in «Сбор задач»: not connected / waiting for the first check / checked / signed out
+const TG_NOTE = { limit: 'Telegram: нейросеть исчерпала лимит на сегодня, остальное разберу завтра.', ai: 'Telegram: нейросеть не ответила, повторю через полчаса.', more: 'Сообщений много — разбираю Telegram по частям.' };
+function tgState() {
+  const on = S().settings.tg?.at, s = Sync.tg?.status;
+  if (!on) return { row: row2('Telegram', 'подключить', { chev: 1, go: 'tg' }) };
+  if (s && s.at >= on && (s.state === 'auth' || s.state === 'nokey')) return { bad: true, row: row2('<span class="dotbad"></span>Telegram', '<span class="pill dark">Войти заново</span>', { go: 'tg' }) };
+  if (!s || s.at < on) return { row: row2('<span class="dotok"></span>Telegram', 'проверю через пару минут') };
+  const line = s.state === 'offline' || s.state === 'flood' ? 'Telegram не ответил. Попробую через полчаса.' : TG_NOTE[s.note];
+  return { row: row2(`<span class="${s.state === 'ok' ? 'dotok' : 'dotbad'}"></span>Telegram`, `проверено ${hmWhen(s.state === 'ok' ? s.at : s.ok_at || s.at)}`), line };
 }
 
 SCREENS.settings = () => inner('Ещё', 'more', 'Настройки', '', `
   ${grp('Обо мне', '')}<div class="card glass">${row2('Как к Вам обращаться', esc(S().settings.name), { chev: 1, act: 'name' })}</div>
-  ${grp('Люди', '')}<div class="card glass">${row2('Кто есть кто', N(S().people.length, ['человек', 'человека', 'человек']), { chev: 1, go: 'people' })}</div>
+  ${grp(S().settings.tg?.at ? 'Люди и чаты' : 'Люди', '')}<div class="card glass">${row2('Кто есть кто', N(S().people.length, ['человек', 'человека', 'человек']), { chev: 1, go: 'people' })}${S().settings.tg?.at ? row2('Чаты Telegram', chatsWord(), { chev: 1, go: 'chats' }) : ''}</div>
   ${Sync.on ? grp('Сбор задач', '') + collectCard() : ''}
   ${grp('Хранение', '')}${storageCard()}
   ${Sync.on ? '' : `${grp('Примерные задачи', '')}<div class="card glass">${S().demo
@@ -525,6 +547,90 @@ async function ghStep(fn, okStep) {
     pane.querySelector('.onb .bt').insertAdjacentHTML('beforebegin', `<p class="say">${msg}</p>`);
   } finally { ui.ghbusy = false; btn.innerHTML = label; }
 }
+
+/* ---------- Telegram (tg.js): same frame as the storage screens, «Oki объясняет» ---------- */
+const TG_SITE = 'https://my.telegram.org/auth?to=apps';
+const tgBack = `<button class="back obk" data-act="tgback">‹ Настройки</button>`;
+const tgField = (name, ph, o = '') => `<div class="kin glass"><input class="in" name="${name}" placeholder="${ph}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" ${o}></div>`;
+SCREENS.tg = r => {
+  const step = r.id || 'intro', l = Tg.st;
+  const sm = (h, p, body, btn, busy, extra = '') => `<form class="onb sm" data-submit="tg${step}">${tgBack}<div class="rb">${RABBIT('calm', '', true)}</div>
+    <h1>${h}</h1><p>${p}</p>${body}<div class="bt"><button class="btn-main" type="submit" data-busy="${busy}">${btn}</button>${extra}</div></form>`;
+  if (step === 'site') return `<div class="onb sm">${tgBack}<div class="rb">${RABBIT('calm', '', true)}</div>
+    <h1>Сначала — ключи<br>от Telegram</h1><p>Их выдаёт сайт Telegram. Войдите по номеру: код придёт в Telegram. Откройте <b>API development tools</b>, впишите App title <b>Oki</b>, Short name <b>oki</b>, платформа — любая, и нажмите <b>Create application</b>.</p>
+    <div class="bt"><a class="btn-main" href="${TG_SITE}" target="_blank" rel="noopener" data-act="tgopen">Открыть сайт Telegram</a><button class="btn-ghost" data-go="tg/keys" style="margin-top:8px">Ключи уже есть</button></div></div>`;
+  if (step === 'keys') return sm('Вставьте два ключа', 'Они на той же странице. <b>App api_id</b> — это число, <b>App api_hash</b> — длинная строка из букв и цифр.',
+    keyField('id', 'App api_id') + keyField('hash', 'App api_hash'), 'Дальше', 'Проверяю…');
+  if (step === 'phone' && l) return sm('Ваш номер<br>в Telegram', 'Telegram пришлёт код — не по SMS, а в само приложение Telegram.',
+    tgField('phone', '+7 900 000-00-00', 'type="tel" inputmode="tel" autocomplete="tel"'), 'Получить код', 'Отправляю…');
+  if (step === 'code' && l?.codeHash) return sm('Код из Telegram', 'Он пришёл в Telegram, в чат <b>Telegram</b>. Никому его не пересылайте.',
+    tgField('code', 'Код', 'inputmode="numeric" autocomplete="one-time-code"'), 'Войти', 'Вхожу…',
+    `<button type="button" class="btn-ghost" data-go="tg/phone" style="margin-top:8px">Код не пришёл</button>`);
+  if (step === 'pass' && l?.codeHash) return sm('Облачный пароль', 'У Вас в Telegram стоит облачный пароль. Введите его — тот, что задан в Telegram → Конфиденциальность → Облачный пароль.',
+    tgField('pass', 'Пароль', 'type="password" autocomplete="current-password"'), 'Войти', 'Вхожу…');
+  if (step === 'groups') return inner('Настройки', 'settings', 'Какие группы читать?', 'Отметьте только нужные. Остальные группы я не открываю. Поменять можно в любой момент в Настройках.',
+    groupList(ui.tgpick || []) + `<div class="gap"></div><div class="gap"></div><button class="btn-main" data-act="tgsave">Готово</button><div class="gap"></div>`);
+  if (step === 'done') return `<div class="onb"><span class="logo" style="font-size:34px">Oki</span><div class="rb">${RABBIT('happy', '', true)}</div>
+    <h1>Telegram подключён.</h1><p>Через пару минут я проверю чаты. Выключить какой-то личный чат или поменять группы можно в Настройках → Чаты Telegram.</p>
+    <div class="bt"><button class="btn-main" data-act="tgdone">Хорошо</button></div></div>`;
+  if (step !== 'intro') return SCREENS.tg({ id: l?.codeHash ? 'code' : l ? 'phone' : 'intro' }); // came back after a reload
+  return `<div class="onb">${tgBack}<span class="logo" style="font-size:34px">Oki</span><div class="rb">${RABBIT('calm', '', true)}</div>
+    <h1>Подключим Telegram</h1><p>Я буду читать «Избранное» и личные чаты и находить в них задачи. Группы — только те, что Вы сами отметите. Я ничего не пишу и не отмечаю прочитанным.</p>
+    <div class="bt"><button class="btn-main" data-go="tg/site">Дальше</button></div></div>`;
+};
+// her chats: what the collector last saw, or what the phone saw while logging in
+const tgChats = () => Sync.tg?.chats?.length ? Sync.tg.chats : ui.tgchats || [];
+function chatsWord() {
+  const p = S().settings.tg || {}, g = (p.groups || []).length, o = (p.off || []).length;
+  return [g ? N(g, ['группа', 'группы', 'групп']) : 'без групп', o ? `${o} выкл.` : ''].filter(Boolean).join(' · ');
+}
+const chatSub = c => [c.n ? N(c.n, ['участник', 'участника', 'участников']) : '', c.at ? dayWord(c.at.slice(0, 10)) : ''].filter(Boolean).join(' · ');
+const chatRow = (c, on, act) => `<div class="row2 pick" data-act="${act}" data-id="${esc(c.id)}"><span class="ck${on ? ' on' : ''}"></span><div class="t">${esc(c.title)}${chatSub(c) ? `<small>${chatSub(c)}</small>` : ''}</div></div>`;
+function groupList(sel) {
+  const g = tgChats().filter(c => c.kind === 'group');
+  return g.length ? `<div class="card glass">${g.map(c => chatRow(c, sel.includes(c.id), 'tgpick')).join('')}</div>`
+    : '<div class="empty">Групп нет — буду читать только личные чаты и «Избранное».</div>';
+}
+SCREENS.chats = () => {
+  const p = S().settings.tg || {}, l = tgChats(), g = p.groups || [], off = p.off || [];
+  const groups = l.filter(c => c.kind === 'group'), mine = l.filter(c => c.kind !== 'group');
+  const body = !l.length ? '<div class="empty">Список чатов появится после первой проверки Telegram — через пару минут.</div>'
+    : grp('Группы', `читаю ${g.filter(id => groups.some(c => c.id === id)).length} из ${groups.length}`) + (groups.length ? `<div class="card glass">${groups.map(c => chatRow(c, g.includes(c.id), 'tggroup')).join('')}</div>` : '<div class="empty">Групп нет.</div>')
+      + grp('Личные чаты', off.length ? `выключено ${off.length}` : 'читаю все') + `<div class="card glass">${mine.map(c => chatRow(c, !off.includes(c.id), 'tgoff')).join('')}</div>`;
+  return inner('Настройки', 'settings', 'Чаты Telegram', 'Группы читаю только отмеченные. Личные чаты — все, кроме выключенных.', body);
+};
+// busy text and error line in place, like ghStep
+const TG_SAY = {
+  keys: 'Telegram не принял ключи. Скопируйте api_id и api_hash ещё раз.', phone: 'Telegram не узнал номер. Проверьте его: +7 и десять цифр.',
+  code: 'Код не подошёл. Проверьте цифры.', expired: 'Код устарел. Нажмите «Код не пришёл» и получите новый.', pass: 'Пароль не подошёл.',
+  nouser: 'На этот номер нет аккаунта Telegram.', banned: 'Telegram не пускает этот номер.', flood: 'Telegram просит подождать. Попробуйте через несколько минут.',
+  perm: 'Ключ GitHub не может сохранить вход. Создайте ключ GitHub заново (Настройки → Хранение) и повторите.', norepo: 'Не нахожу закрытое хранилище.',
+  tg: 'Telegram ответил ошибкой. Попробуйте ещё раз.', offline: 'Нет связи с Telegram. Проверьте интернет и попробуйте ещё раз.',
+};
+async function tgStep(fn) {
+  const pane = Nav.cur.el, btn = pane.querySelector('[type="submit"], [data-act="tgsave"]');
+  if (ui.tgbusy) return;
+  ui.tgbusy = true;
+  const label = btn.innerHTML; btn.textContent = btn.dataset.busy || 'Сохраняю…';
+  pane.querySelector('.say')?.remove();
+  try { await fn(); }
+  catch (e) {
+    const say = el => (el.querySelector('.onb .bt') || btn).insertAdjacentHTML('beforebegin', `<p class="say">${TG_SAY[e.code] || TG_SAY.tg}</p>`);
+    if (e.code === 'keys' && route().id !== 'keys') { go('tg/keys'); setTimeout(() => say(Nav.cur.el), 50); } // wrong keys show up only when Telegram is asked for a code
+    else say(pane);
+  }
+  finally { ui.tgbusy = false; btn.innerHTML = label; }
+}
+// signed in: take the chat list, hand the session to GitHub, then let Даша tick the groups
+async function tgIn() {
+  btnSay('Сохраняю вход…');
+  ui.tgchats = await Tg.chats();
+  await Tg.finish();
+  ui.tgpick = S().settings.tg?.groups || [];
+  Store.act('settings', { settings: { tg: { ...(S().settings.tg || {}), groups: ui.tgpick, at: Store.stamp() } } }); // signed in = connected, even before the groups
+  go('tg/groups');
+}
+const btnSay = t => { const b = Nav.cur.el.querySelector('[type="submit"]'); if (b) b.textContent = t; };
 
 SCREENS.people = () => {
   const by = { work: [], study: [], personal: [] };
@@ -709,6 +815,17 @@ const A = {
   cleardemo: () => confirmSheet('Стереть примерные задачи?', 'Все выдуманные задачи, встречи и люди исчезнут. Останется чистое приложение для Ваших настоящих задач.', 'Стереть', 'cleardemo-ok'),
   paste: async el => { try { const t = (await navigator.clipboard.readText()).trim(); if (t) el.previousElementSibling.value = t; } catch (e) { el.previousElementSibling.focus(); toast('Нажмите в поле и выберите «Вставить»'); } },
   ghopen: () => setTimeout(() => go('gh/paste'), 600),
+  tgopen: () => setTimeout(() => go('tg/keys'), 600),
+  tgback: () => { Tg.drop(); ui.scroll = {}; Nav.intent = { anim: 'pop', stack: 'reset' }; location.replace('#/settings'); },
+  tgpick: el => { const id = el.dataset.id, l = ui.tgpick ||= []; l.includes(id) ? l.splice(l.indexOf(id), 1) : l.push(id); el.querySelector('.ck').classList.toggle('on', l.includes(id)); },
+  tgsave: () => {
+    Store.act('settings', { settings: { tg: { ...(S().settings.tg || {}), groups: ui.tgpick || [], at: Store.stamp() } } });
+    Sync.collect().catch(() => {}); setTimeout(() => Sync.run(), 150e3);
+    go('tg/done');
+  },
+  tgdone: () => { ui.tgpick = null; ui.scroll = {}; Nav.intent = { anim: 'pop', stack: 'reset' }; location.replace('#/settings'); },
+  tggroup: el => { const p = S().settings.tg, id = el.dataset.id, g = (p.groups || []).filter(x => x !== id); if (g.length === (p.groups || []).length) g.push(id); Store.act('settings', { settings: { tg: { ...p, groups: g } } }); },
+  tgoff: el => { const p = S().settings.tg, id = el.dataset.id, o = (p.off || []).filter(x => x !== id); if (o.length === (p.off || []).length) o.push(id); Store.act('settings', { settings: { tg: { ...p, off: o } } }); },
   ghcopy: async () => toast(await copy(ui.ghkey) ? 'Ключ скопирован' : 'Не получилось скопировать'),
   ghstart: () => { ui.ghwasdemo = S().demo; ghStep(() => Sync.start(ui.ghp, ui.ghkey), 'gh/done'); },
   ghdone: () => { ui.ghp = ui.ghkey = null; ui.scroll = {}; Nav.intent = { anim: 'pop', stack: 'reset' }; location.replace('#/settings'); },
@@ -717,8 +834,8 @@ const A = {
   ghcopykey: async () => { toast(await copy(Sync.cfg.key) ? 'Ключ скопирован' : 'Не получилось скопировать'); closeSheet(); },
   collect: async () => {
     if (ui.collecting) return;
-    ui.collecting = true; toast('Запускаю проверку почты…');
-    try { await Sync.collect(); toast('Проверяю почту. Новые задачи появятся через пару минут.'); setTimeout(() => Sync.run(), 150e3); }
+    ui.collecting = true; toast('Запускаю проверку…');
+    try { await Sync.collect(); toast(S().settings.tg?.at ? 'Проверяю почту и Telegram. Новые задачи появятся через пару минут.' : 'Проверяю почту. Новые задачи появятся через пару минут.'); setTimeout(() => Sync.run(), 150e3); }
     catch (e) { toast(e.code === 'perm' ? 'У ключа GitHub нет права запускать проверку.' : 'Не получилось — нет связи с GitHub.'); }
     finally { ui.collecting = false; }
   },
@@ -744,6 +861,10 @@ const A = {
 };
 
 const SUBMIT = {
+  tgkeys: f => tgStep(async () => { Tg.keys(f.id.value, f.hash.value); go('tg/phone'); }),
+  tgphone: f => tgStep(async () => { await Tg.phone(f.phone.value); go('tg/code'); }),
+  tgcode: f => tgStep(async () => { if (await Tg.code(f.code.value) === 'pass') go('tg/pass'); else await tgIn(); }),
+  tgpass: f => tgStep(async () => { await Tg.password(f.pass.value); await tgIn(); }),
   ghtoken: f => {
     const v = f.token.value.trim(); if (!v) { f.token.focus(); return; }
     ghStep(async () => {
@@ -829,5 +950,5 @@ Sync.sub(() => {
   const k = Sync.st.status;
   if (GH_ERR[k] && k !== 'offline' && k !== 'busy' && Sync.st.told !== k) { Sync.st.told = k; toast(GH_ERR[k] + ' Подробнее — в Настройках.'); }
   if (k === 'ok') Sync.st.told = '';
-  if (['settings', 'off'].includes(Nav.cur?.r.name)) render();
+  if (['settings', 'off', 'chats'].includes(Nav.cur?.r.name)) render();
 });

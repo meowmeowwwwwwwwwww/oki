@@ -6,11 +6,12 @@
 const Sync = (() => {
   const CFG = 'oki.gh', CACHE = 'oki.ghc';
   const API = 'https://api.github.com';
-  const SNAP = 'data/state.oki', DIR = 'actions', MAIL = 'data/mail.oki';
+  const SNAP = 'data/state.oki', DIR = 'actions', MAIL = 'data/mail.oki', TGF = 'data/tg.oki';
   const FOLD_AT = 20, FOLD_AGE = 864e5; // fold when this many action files, or the oldest is a day old
 
   let cfg = read(CFG) || null;
   let mail = read('oki.mail') || null; // the collector's status: when mail was read, what went wrong
+  let tg = read('oki.tg') || null; // the same for Telegram, plus her chat list for «Чаты»
   let cache = read(CACHE) || {}; // action file name → decrypted action (files never change)
   let ck = null, running = null, again = false, timer = 0;
   const st = { status: cfg ? 'idle' : 'off', told: '' };
@@ -130,6 +131,7 @@ const Sync = (() => {
     write(CACHE, cache);
     // what the mail collector last said about itself (only its status is kept on the phone)
     try { const m = await getFile(MAIL); if (m) { const x = await unseal(m.content); mail = { status: x.status, usage: x.usage }; write('oki.mail', mail); } } catch (e) {}
+    try { const m = await getFile(TGF); if (m) { const x = await unseal(m.content); tg = { status: x.status, chats: x.chats || tg?.chats || [] }; write('oki.tg', tg); } } catch (e) {}
     const acts = files.map(f => cache[f.name]).sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
     Store.rebuild(snap.data, acts);
     // 3. fold old actions into the snapshot; if anyone else wrote it meanwhile, try next time
@@ -207,6 +209,21 @@ const Sync = (() => {
     if (r.status === 404) throw fail('norepo');
     if (!r.ok) throw fail('perm');
   }
+  // a key for the collector (Telegram session and the like) → the private repo's Secrets, sealed with its public key
+  async function secret(name, value) {
+    await Promise.all(['lib/nacl-fast.min.js', 'lib/seal.js'].map(src => new Promise((ok, no) => {
+      if (document.querySelector(`script[src="${src}"]`)) return ok();
+      const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(fail('offline')); document.head.append(s);
+    })));
+    const base = `/repos/${cfg.owner}/${cfg.repo}/actions/secrets`;
+    const k = await gh(base + '/public-key');
+    if (k.status === 404) throw fail('norepo');
+    if (!k.ok) throw fail('perm');
+    const pk = await k.json();
+    const enc = Seal.seal(new TextEncoder().encode(value), unb64(pk.key));
+    const r = await gh(`${base}/${name}`, { method: 'PUT', body: { encrypted_value: b64(enc), key_id: pk.key_id } });
+    if (!r.ok) throw fail(r.status === 404 ? 'norepo' : 'perm');
+  }
   // «Ввести ключ шифрования» when this phone's key stopped opening the repo
   async function rekey(keyText) {
     const k = tidyKey(keyText); if (!k) throw fail('badkey');
@@ -226,8 +243,9 @@ const Sync = (() => {
   setTimeout(run, 400);
 
   return {
-    st, run, probe, join, start, forget, newKey, tidyKey, collect, rekey,
+    st, run, probe, join, start, forget, newKey, tidyKey, collect, rekey, secret,
     get mail() { return mail; },
+    get tg() { return tg; },
     get on() { return !!cfg; },
     get cfg() { return cfg; },
     sub: f => subs.push(f),

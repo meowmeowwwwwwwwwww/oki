@@ -95,7 +95,7 @@ const Store = (() => {
 
   return {
     get s() { return state; },
-    load, act, uid, task, event, data, fold, rebuild,
+    load, act, uid, stamp, task, event, data, fold, rebuild,
     on: f => subs.push(f),
     // local-only flags, not actions
     setFlag(k, v) { state[k] = v; save(); },
