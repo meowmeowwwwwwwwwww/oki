@@ -487,6 +487,10 @@ const keyField = (name, ph, val = '') => `<div class="kin glass"><input class="i
   <button type="button" class="pill" data-act="paste">Вставить</button></div>`;
 SCREENS.gh = r => {
   const step = r.id || 'intro', p = ui.ghp;
+  if (step === 'key' && !p && Sync.on) return `<form class="onb sm" data-submit="ghrekey">${ghBack}<div class="rb">${RABBIT('calm', '', true)}</div>
+    <h1>Ключ шифрования</h1><p>Нужен ключ из приложения <b>«Пароли»</b>. Он начинается с <b>OKI-</b>.</p>
+    ${keyField('key', 'OKI-…')}
+    <div class="bt"><button class="btn-main" type="submit" data-busy="Открываю…">Открыть задачи</button></div></form>`;
     if (step === 'paste' || (step !== 'intro' && step !== 'done' && !p)) return `<form class="onb sm" data-submit="ghtoken">${ghBack}<div class="rb">${RABBIT('calm', '', true)}</div>
     <h1>Вставьте ключ</h1><p>Тот, что GitHub показал после <b>Generate token</b>. Он начинается с <b>github_pat_</b>.</p>
     ${keyField('token', 'github_pat_…')}
@@ -750,6 +754,7 @@ const SUBMIT = {
       go(ui.ghp.has ? 'gh/key' : 'gh/new');
     });
   },
+  ghrekey: f => { const v = f.key.value; ghStep(async () => { await Sync.rekey(v); toast('Ключ подошёл, задачи открыты.'); }, 'settings'); },
   ghjoin: f => { const v = f.key.value; ui.ghwasdemo = S().demo; ghStep(() => Sync.join(ui.ghp, v), 'gh/done'); },
   quick: f => {
     const v = f.q.value.trim(); if (!v) return;

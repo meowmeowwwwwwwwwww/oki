@@ -80,12 +80,18 @@ const Sync = (() => {
     return r;
   }
   const repo = (c = cfg) => `/repos/${c.owner}/${c.repo}/contents/`;
+  // bytes come from the git blob, not from «contents»: GitHub sometimes takes a sealed file for UTF-16 text there and garbles it
+  async function blob(sha, c = cfg) {
+    const r = await gh(`/repos/${c.owner}/${c.repo}/git/blobs/${sha}`, {}, c);
+    if (!r.ok) throw fail('offline');
+    return (await r.json()).content;
+  }
   async function getFile(path, c = cfg) {
     const r = await gh(repo(c) + path, {}, c);
     if (r.status === 404) return null;
     if (!r.ok) throw fail('offline');
     const j = await r.json();
-    return { sha: j.sha, content: j.content };
+    return { sha: j.sha, content: await blob(j.sha, c) };
   }
   async function putFile(path, content, sha, c = cfg) {
     const r = await gh(repo(c) + path, { method: 'PUT', body: { message: 'oki', content, ...(sha ? { sha } : {}) } }, c);
@@ -118,7 +124,7 @@ const Sync = (() => {
     const snap = await unseal(snapF.content);
     const applied = new Set(snap.applied || []);
     const files = (await listActions()).filter(f => !applied.has(f.name));
-    for (const f of files) if (!cache[f.name]) cache[f.name] = await unseal((await getFile(`${DIR}/${f.name}`)).content);
+    for (const f of files) if (!cache[f.name]) cache[f.name] = await unseal(await blob(f.sha));
     const names = new Set(files.map(f => f.name));
     Object.keys(cache).forEach(n => { if (!names.has(n)) delete cache[n]; });
     write(CACHE, cache);
@@ -201,6 +207,14 @@ const Sync = (() => {
     if (r.status === 404) throw fail('norepo');
     if (!r.ok) throw fail('perm');
   }
+  // «Ввести ключ шифрования» when this phone's key stopped opening the repo
+  async function rekey(keyText) {
+    const k = tidyKey(keyText); if (!k) throw fail('badkey');
+    const f = await getFile(SNAP); if (!f) throw fail('empty');
+    await unseal(f.content, await cryptoKey(k));
+    cfg.key = k; ck = null; cache = {}; write(CFG, cfg); write(CACHE, cache);
+    await run();
+  }
   // forget the repo on this phone; tasks stay here
   function forget() { cfg = null; cache = {}; ck = null; write(CFG, null); write(CACHE, null); st.status = 'off'; tell(); }
 
@@ -212,7 +226,7 @@ const Sync = (() => {
   setTimeout(run, 400);
 
   return {
-    st, run, probe, join, start, forget, newKey, tidyKey, collect,
+    st, run, probe, join, start, forget, newKey, tidyKey, collect, rekey,
     get mail() { return mail; },
     get on() { return !!cfg; },
     get cfg() { return cfg; },
