@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<base href="../">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Проба 2">
+<meta name="theme-color" content="#E9EBF0">
+<meta name="format-detection" content="telephone=no">
+<title>Oki</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <radialGradient id="aFill" cx="45%" cy="40%" r="70%"><stop offset="0" stop-color="#fff"/><stop offset=".6" stop-color="#F1F1FD"/><stop offset="1" stop-color="#C9CCF6"/></radialGradient>
+  <radialGradient id="aFillWarm" cx="45%" cy="40%" r="70%"><stop offset="0" stop-color="#fff"/><stop offset=".55" stop-color="#FBF1FD"/><stop offset="1" stop-color="#E4C6F5"/></radialGradient>
+  <radialGradient id="aFillGrey" cx="45%" cy="40%" r="70%"><stop offset="0" stop-color="#FAFAFB"/><stop offset=".6" stop-color="#ECEDF1"/><stop offset="1" stop-color="#C6C9D2"/></radialGradient>
+  <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5"/></filter>
+  <filter id="aura" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="20"/></filter>
+</defs></svg>
+<div id="bg"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i></div>
+<main id="view"></main>
+<div id="layer"></div>
+<div id="toast" role="status"></div>
+<div class="grain"></div>
+<script src="sample.js"></script>
+<script src="store.js"></script>
+<script src="sync.js"></script>
+<script src="app.js"></script>
+<script src="motion.js"></script>
+</body>
+</html>
