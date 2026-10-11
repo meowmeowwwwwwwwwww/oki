@@ -15,7 +15,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 [data-go],[data-act]{cursor:pointer}
 
 /* background: drifting blobs + grain */
-#bg{position:fixed;inset:0;bottom:calc(0px - var(--xb,0px));overflow:hidden;pointer-events:none}
+#bg{position:fixed;inset:0;overflow:hidden;pointer-events:none}
 .blob{position:absolute;border-radius:50%;filter:blur(46px);animation:drift 14s ease-in-out infinite alternate;transition:left 1.2s ease,top 1.2s ease,right 1.2s ease}
 .b1{width:300px;height:300px;right:-120px;top:40px;background:var(--lav)}
 .b2{width:320px;height:320px;left:-140px;top:50%;background:var(--ice);animation-delay:-6s}
@@ -24,12 +24,12 @@ body.r-home #bg .b1{width:330px;height:330px;right:auto;left:-90px;top:110px}
 body.r-home #bg .b2{left:auto;right:-110px;top:360px;width:300px;height:300px}
 body.r-home #bg .b3{right:auto;left:10px;width:380px;height:300px;bottom:-120px}
 @keyframes drift{to{transform:translate(30px,-24px) scale(1.08)}}
-.grain{position:fixed;inset:0;bottom:calc(0px - var(--xb,0px));background:var(--grain);mix-blend-mode:multiply;pointer-events:none;z-index:90;opacity:.35}
+.grain{position:fixed;inset:0;background:var(--grain);mix-blend-mode:multiply;pointer-events:none;z-index:90;opacity:.35}
 .glass{background:rgba(255,255,255,.42);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);
   border:1px solid rgba(255,255,255,.75);box-shadow:0 10px 30px rgba(60,66,120,.08)}
 
 /* screen frame */
-#view{position:fixed;top:0;bottom:calc(0px - var(--xb,0px));left:0;right:0;margin:0 auto;max-width:480px;overflow:hidden}
+#view{position:fixed;top:0;bottom:0;left:0;right:0;margin:0 auto;max-width:480px;overflow:hidden}
 /* each screen is a layer: tab screens sit above the dock line, pushed screens cover everything */
 .pane{position:absolute;top:0;left:0;right:0;bottom:var(--dockh,0px);z-index:1;touch-action:pan-y pinch-zoom}
 .pane.full{bottom:0;z-index:3;isolation:isolate;box-shadow:-14px 0 40px rgba(60,66,120,.16)}
@@ -281,7 +281,7 @@ a.btn-main,a.btn-ghost{text-decoration:none}
 .dotbad{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px;background:var(--ink);box-shadow:0 0 0 3px rgba(17,19,23,.12)}
 
 /* sheet */
-#layer{position:fixed;inset:0;bottom:calc(0px - var(--xb,0px));z-index:70;pointer-events:none}
+#layer{position:fixed;inset:0;z-index:70;pointer-events:none}
 #layer.on{pointer-events:auto}
 .dim{position:absolute;inset:0;background:rgba(233,235,240,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:0;transition:opacity .25s}
 .sheet{position:absolute;left:0;right:0;bottom:0;margin:0 auto;max-width:480px;max-height:92%;overflow-y:auto;border-radius:34px 34px 0 0;
@@ -303,7 +303,7 @@ a.btn-main,a.btn-ghost{text-decoration:none}
 .sheet .del{color:var(--ink2);font-size:14px;display:block;margin:14px auto 0;padding:8px}
 
 /* toast */
-#toast{position:fixed;left:50%;bottom:calc(var(--sb) + 150px - var(--xb,0px));transform:translate(-50%,20px);opacity:0;z-index:80;
+#toast{position:fixed;left:50%;bottom:calc(var(--sb) + 150px);transform:translate(-50%,20px);opacity:0;z-index:80;
   background:var(--ink);color:#fff;font-size:14px;padding:11px 18px;border-radius:22px;width:max-content;max-width:calc(100vw - 48px);text-align:center;line-height:1.35;pointer-events:none;transition:opacity .2s,transform .2s;
   box-shadow:0 10px 30px rgba(20,24,60,.3)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
@@ -342,3 +342,8 @@ button,.chip,.pill,[data-go],[data-act]{touch-action:manipulation}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 #satprobe{position:fixed;top:0;left:0;width:0;height:0;padding-top:env(safe-area-inset-top);visibility:hidden;pointer-events:none}
+/* see-through status bar on iPhone (html.short, set in motion.js): iPhone keeps the bottom strip for itself
+   and paints it plain mist, so the page fades into that colour and needs no room for the home bar */
+html.short{--sb:10px}
+html.short #bg::after,html.short .pbg::after{content:"";position:absolute;left:0;right:0;bottom:0;height:120px;background:linear-gradient(rgba(233,235,240,0),#E9EBF0 85%)}
+html.short .grain{-webkit-mask-image:linear-gradient(#000 calc(100% - 90px),transparent);mask-image:linear-gradient(#000 calc(100% - 90px),transparent)}

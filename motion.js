@@ -396,16 +396,16 @@ window.addEventListener('pointerup', sheetUp);
 window.addEventListener('pointercancel', sheetUp);
 
 /* ---------- full screen on iPhone ---------- */
-// Home-screen app with the see-through status bar (white-translucent, chosen by Даша 2026-10-11):
-// the page starts under the clock, but iPhone ends the window one status bar short of the bottom.
-// When the missing strip equals the top inset, stretch every full-screen layer down by it.
+// Home-screen app with the see-through status bar (black-translucent, chosen by Даша 2026-10-11):
+// the page starts under the clock, but iPhone ends the window one status bar short of the bottom
+// and paints that strip itself (iOS 26). When the missing strip equals the top inset, mark html.short.
 function fitScreen() {
   let p = $('#satprobe');
   if (!p) { p = document.createElement('i'); p.id = 'satprobe'; document.body.append(p); }
   const top = parseFloat(getComputedStyle(p).paddingTop) || 0;
   const gap = screen.height - innerHeight;
   const fix = navigator.standalone && top > 0 && Math.abs(gap - top) < 3 ? gap : 0;
-  document.documentElement.style.setProperty('--xb', fix + 'px');
+  document.documentElement.classList.toggle('short', fix > 0);
 }
 fitScreen();
 addEventListener('resize', fitScreen);
