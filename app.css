@@ -412,3 +412,4 @@ html.short #bg::after,html.short .pbg::after{content:"";position:absolute;left:0
 
 /* keyboard open (motion.js): the screen ends at the keyboard, no room for the home bar is needed */
 html.kb{--sb:8px}
+html.kb .dock .tabs{display:none} /* typing: only the field sits on the keyboard */
