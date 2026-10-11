@@ -452,9 +452,29 @@ function storageCard() {
     ${row2('Отключить на этом телефоне', '', { chev: 1, act: 'ghoff' })}</div>`;
 }
 
+// «Сбор задач» (design: final.html settings): what the mail collector on GitHub last reported
+const MAIL_BOX = { auth: 'Яндекс не пускает в ящик: пароль приложения удалён или сменился.', nokey: 'Нет пароля от ящика.', offline: 'Не получилось связаться с почтой. Попробую через полчаса.' };
+const MAIL_NOTE = { limit: 'Нейросеть исчерпала бесплатный лимит на сегодня. Остальное разберу завтра утром.', ai: 'Нейросеть не ответила. Повторю через полчаса.', more: 'Писем много — разбираю по частям.' };
+function collectCard() {
+  const m = Sync.mail?.status;
+  if (!m) return `<div class="card glass">${row2('<span class="dotok"></span>Почта', 'ещё не проверялась')}
+    <div class="txt" style="padding-top:2px">Как только программа на GitHub проверит почту, здесь появится время проверки.</div></div>`;
+  const at = new Date(m.at), mins = (Date.now() - at) / 6e4, h = new Date().getHours();
+  const when = `${iso(at) === today() ? '' : dayWord(iso(at)) + ', '}${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  const bad = Object.entries(m.boxes || {}).filter(([, v]) => v !== 'ok');
+  const stale = mins > 120 && h >= 9 && h < 23; // runs every half hour from 7 to 23:30
+  const lines = [...bad.map(([a, v]) => `<b>${esc(a)}</b>. ${MAIL_BOX[v] || MAIL_BOX.offline}`),
+    ...(MAIL_NOTE[m.note] ? [MAIL_NOTE[m.note]] : []), ...(stale ? ['Почта давно не проверялась: похоже, программа на GitHub остановилась.'] : [])];
+  const fallback = m.model && !m.model.startsWith('qwen/') ? row2('Нейросеть', 'запасная') : '';
+  return `<div class="card glass">${row2(`<span class="${bad.length || stale ? 'dotbad' : 'dotok'}"></span>Почта`, `проверено ${when}`)}
+    ${lines.length ? `<div class="it2"><div class="t">${lines.join('<br>')}</div></div>` : ''}${fallback}
+    ${row2('Проверить сейчас', '', { chev: 1, act: 'collect' })}</div>`;
+}
+
 SCREENS.settings = () => inner('Ещё', 'more', 'Настройки', '', `
   ${grp('Обо мне', '')}<div class="card glass">${row2('Как к Вам обращаться', esc(S().settings.name), { chev: 1, act: 'name' })}</div>
   ${grp('Люди', '')}<div class="card glass">${row2('Кто есть кто', N(S().people.length, ['человек', 'человека', 'человек']), { chev: 1, go: 'people' })}</div>
+  ${Sync.on ? grp('Сбор задач', '') + collectCard() : ''}
   ${grp('Хранение', '')}${storageCard()}
   ${Sync.on ? '' : `${grp('Примерные задачи', '')}<div class="card glass">${S().demo
     ? row2('Стереть примерные задачи<small>и начать с чистого листа</small>', '', { chev: 1, act: 'cleardemo' })
@@ -691,6 +711,13 @@ const A = {
   ghkey: async () => sheet(`<h3>Ключ шифрования</h3><p class="txt" style="padding:0 4px">Только им открываются Ваши задачи. Храните его в «Паролях».</p>
     <div class="keybox">${Sync.cfg.key.slice(4).split('-').join(' ')}</div><button class="btn-main" data-act="ghcopykey">${COPY}Скопировать</button>`),
   ghcopykey: async () => { toast(await copy(Sync.cfg.key) ? 'Ключ скопирован' : 'Не получилось скопировать'); closeSheet(); },
+  collect: async () => {
+    if (ui.collecting) return;
+    ui.collecting = true; toast('Запускаю проверку почты…');
+    try { await Sync.collect(); toast('Проверяю почту. Новые задачи появятся через пару минут.'); setTimeout(() => Sync.run(), 150e3); }
+    catch (e) { toast(e.code === 'perm' ? 'У ключа GitHub нет права запускать проверку.' : 'Не получилось — нет связи с GitHub.'); }
+    finally { ui.collecting = false; }
+  },
   ghoff: () => confirmSheet('Отключить хранилище?', 'Этот телефон перестанет сохранять задачи на GitHub. Задачи останутся и здесь, и в хранилище. Подключить снова можно в любой момент, понадобятся оба ключа.', 'Отключить', 'ghoff-ok'),
   'ghoff-ok': () => { closeSheet(); Sync.forget(); render(); toast('Хранилище отключено'); },
   'cleardemo-ok': () => { closeSheet(); ui.scroll = {}; Store.clearDemo(); go('home'); toast('Готово, чистый лист'); },

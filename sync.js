@@ -6,10 +6,11 @@
 const Sync = (() => {
   const CFG = 'oki.gh', CACHE = 'oki.ghc';
   const API = 'https://api.github.com';
-  const SNAP = 'data/state.oki', DIR = 'actions';
+  const SNAP = 'data/state.oki', DIR = 'actions', MAIL = 'data/mail.oki';
   const FOLD_AT = 20, FOLD_AGE = 864e5; // fold when this many action files, or the oldest is a day old
 
   let cfg = read(CFG) || null;
+  let mail = read('oki.mail') || null; // the collector's status: when mail was read, what went wrong
   let cache = read(CACHE) || {}; // action file name → decrypted action (files never change)
   let ck = null, running = null, again = false, timer = 0;
   const st = { status: cfg ? 'idle' : 'off', told: '' };
@@ -121,6 +122,8 @@ const Sync = (() => {
     const names = new Set(files.map(f => f.name));
     Object.keys(cache).forEach(n => { if (!names.has(n)) delete cache[n]; });
     write(CACHE, cache);
+    // what the mail collector last said about itself (only its status is kept on the phone)
+    try { const m = await getFile(MAIL); if (m) { const x = await unseal(m.content); mail = { status: x.status, usage: x.usage }; write('oki.mail', mail); } } catch (e) {}
     const acts = files.map(f => cache[f.name]).sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
     Store.rebuild(snap.data, acts);
     // 3. fold old actions into the snapshot; if anyone else wrote it meanwhile, try next time
@@ -192,6 +195,12 @@ const Sync = (() => {
     write(CFG, cfg); write(CACHE, cache);
     await run();
   }
+  // «Проверить сейчас»: start the collector on GitHub out of schedule (TZ §4)
+  async function collect() {
+    const r = await gh(`/repos/${cfg.owner}/${cfg.repo}/actions/workflows/collect.yml/dispatches`, { method: 'POST', body: { ref: 'main' } });
+    if (r.status === 404) throw fail('norepo');
+    if (!r.ok) throw fail('perm');
+  }
   // forget the repo on this phone; tasks stay here
   function forget() { cfg = null; cache = {}; ck = null; write(CFG, null); write(CACHE, null); st.status = 'off'; tell(); }
 
@@ -203,7 +212,8 @@ const Sync = (() => {
   setTimeout(run, 400);
 
   return {
-    st, run, probe, join, start, forget, newKey, tidyKey,
+    st, run, probe, join, start, forget, newKey, tidyKey, collect,
+    get mail() { return mail; },
     get on() { return !!cfg; },
     get cfg() { return cfg; },
     sub: f => subs.push(f),

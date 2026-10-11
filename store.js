@@ -51,6 +51,7 @@ const Store = (() => {
     event_new(a) { state.events.push(Object.assign({ id: a.ref }, a.event)); },
     event_delete(a) { state.events = state.events.filter(e => e.id !== a.ref); },
     wait_got(a) { const w = state.waiting.find(w => w.id === a.ref); if (w) w.got = a.at; },
+    journal_new(a) { state.journal.push(Object.assign({ id: a.ref, at: a.at }, a.item)); }, // written by the mail collector
     journal_to_task(a) {
       const j = state.journal.find(j => j.id === a.ref); if (j) j.taken = a.at;
       R.task_new({ ref: a.task_id, at: a.at, task: a.task });
