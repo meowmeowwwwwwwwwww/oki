@@ -528,7 +528,7 @@ function aiLeft(a, m) {
 const atWhen = d => `${iso(d) === today() ? '' : dayWord(iso(d)) + ' '}в ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 function aiLine(a, m) {
   const l = aiLeft(a, m);
-  if (!l.left) return `на сегодня закончилась${l.until ? `, снова ${atWhen(l.until)}` : ''}`;
+  if (!l.left) return `на сегодня закончилась${l.until ? `, обновится ${atWhen(l.until)}` : ''}`;
   return `осталось ${thou(l.left)} из ${thou(l.of)} ${l.unit}${l.cf ? ' · общие на Cloudflare' : ''}`;
 }
 const aiBar = (a, m, w) => { const l = aiLeft(a, m); return `<div class="aibar${w ? ' w' : ''}"><i style="width:${Math.round(l.left / l.of * 100)}%"></i></div>`; };
@@ -539,7 +539,7 @@ function aiCard() {
   const now = aiNow(a);
   const top = now ? `<div class="k">Сейчас разбирает</div><div class="nm">${esc(aiName(now))}<small>${aiWhere(now)}</small></div>${aiBar(a, now, 1)}<div class="n">${aiLine(a, now)}</div>`
     : (() => { const u = a.models.map(m => aiLeft(a, m).until).filter(Boolean).sort((x, y) => x - y)[0];
-      return `<div class="k">Сейчас разбирает</div><div class="nm">Никто</div><div class="n">У всех пяти лимит на сегодня закончился.${u ? ` Разбор продолжится ${atWhen(u)}.` : ''}</div>`; })();
+      return `<div class="k">Сейчас разбирает</div><div class="nm">Никто</div><div class="n">У всех пяти лимит на сегодня закончился.${u ? ` Первый обновится ${atWhen(u)}.` : ''}</div>`; })();
   return `${grp('Нейросеть', '')}<div class="card glass"><div class="aib">${top}</div>
     ${row2('Все нейросети', `${a.models.length} по очереди`, { chev: 1, act: 'ais' })}</div>`;
 }
