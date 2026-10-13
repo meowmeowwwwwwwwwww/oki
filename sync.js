@@ -6,13 +6,14 @@
 const Sync = (() => {
   const CFG = 'oki.gh', CACHE = 'oki.ghc';
   const API = 'https://api.github.com';
-  const SNAP = 'data/state.oki', DIR = 'actions', MAIL = 'data/mail.oki', TGF = 'data/tg.oki', NOTES = 'data/notes.oki';
+  const SNAP = 'data/state.oki', DIR = 'actions', MAIL = 'data/mail.oki', TGF = 'data/tg.oki', NOTES = 'data/notes.oki', AIF = 'data/ai.oki';
   const FOLD_AT = 20, FOLD_AGE = 864e5; // fold when this many action files, or the oldest is a day old
 
   let cfg = read(CFG) || null;
   let mail = read('oki.mail') || null; // the collector's status: when mail was read, what went wrong
   let tg = read('oki.tg') || null; // the same for Telegram, plus her chat list for «Чаты»
   let notes = read('oki.notes') || null; // the same for notes from the iPhone
+  let ai = read('oki.ai') || null; // how much of today's free limit each AI model has used
   let cache = read(CACHE) || {}; // action file name → decrypted action (files never change)
   let ck = null, running = null, again = false, timer = 0;
   const st = { status: cfg ? 'idle' : 'off', told: '' };
@@ -134,6 +135,7 @@ const Sync = (() => {
     try { const m = await getFile(MAIL); if (m) { const x = await unseal(m.content); mail = { status: x.status, usage: x.usage }; write('oki.mail', mail); } } catch (e) {}
     try { const m = await getFile(TGF); if (m) { const x = await unseal(m.content); tg = { status: x.status, chats: x.chats || tg?.chats || [] }; write('oki.tg', tg); } } catch (e) {}
     try { const m = await getFile(NOTES); if (m) { notes = { status: (await unseal(m.content)).status }; write('oki.notes', notes); } } catch (e) {}
+    try { const m = await getFile(AIF); if (m) { ai = await unseal(m.content); write('oki.ai', ai); } } catch (e) {}
     const acts = files.map(f => cache[f.name]).sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
     Store.rebuild(snap.data, acts);
     // 3. fold old actions into the snapshot; if anyone else wrote it meanwhile, try next time
@@ -256,6 +258,7 @@ const Sync = (() => {
     get mail() { return mail; },
     get tg() { return tg; },
     get notes() { return notes; },
+    get ai() { return ai; },
     get on() { return !!cfg; },
     get cfg() { return cfg; },
     sub: f => subs.push(f),

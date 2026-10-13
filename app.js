@@ -502,7 +502,7 @@ function collectCard() {
     const stale = mins > 120 && h >= 9 && h < 23; // runs every half hour from 7 to 23:30
     lines = [...bad.map(([a, v]) => `<b>${esc(a)}</b>. ${MAIL_BOX[v] || MAIL_BOX.offline}`),
       ...(MAIL_NOTE[m.note] ? [MAIL_NOTE[m.note]] : []), ...(stale ? ['Почта давно не проверялась: похоже, программа на GitHub остановилась.'] : [])];
-    fallback = m.model && !m.model.startsWith('qwen/') ? row2('Нейросеть', 'запасная') : '';
+    if (!Sync.ai) fallback = m.model && !m.model.startsWith('qwen/') ? row2('Нейросеть', 'запасная') : ''; // before the collector wrote data/ai.oki
     mailRow = row2(`<span class="${bad.length || stale ? 'dotbad' : 'dotok'}"></span>Почта`, `проверено ${hmWhen(m.at)}`);
   }
   const t = tgState(), n = notesState();
@@ -512,6 +512,44 @@ function collectCard() {
     ${lines.length ? `<div class="it2"><div class="t">${lines.join('<br>')}</div></div>` : ''}${fallback}
     ${row2('Проверить сейчас', '', { chev: 1, act: 'collect' })}</div>`;
 }
+// «Нейросеть» (variant Б, Даша 2026-10-14): who reads letters and chats now and how much of today's free limit is left.
+// data/ai.oki from the collector: used today (Groq tokens per model, one Cloudflare pool of neurons), until = limit hit.
+const AI_NAME = { 'qwen/qwen3.8-27b': 'Qwen 3.8', 'openai/gpt-oss-120b': 'gpt-oss-120b', 'openai/gpt-oss-20b': 'gpt-oss-20b' };
+const aiName = m => { const id = m.replace(/^cf:@cf\//, ''); return AI_NAME[id] || id.replace(/^[^/]+\//, ''); };
+const aiWhere = m => m.startsWith('cf:') ? 'Cloudflare' : 'Groq';
+const thou = n => n >= 1000 ? `${n >= 1e4 ? Math.round(n / 1000) : String(Math.round(n / 100) / 10).replace('.', ',')} тыс.` : String(Math.round(n));
+function aiLeft(a, m) {
+  const cf = m.startsWith('cf:'), of = cf ? a.cf : a.groq;
+  const fresh = a.day === new Date().toISOString().slice(0, 10); // a new UTC day: the counts start again
+  const used = fresh ? (cf ? a.used?.cf : a.used?.[m]) || 0 : 0;
+  const until = a.until?.[m] && new Date(a.until[m]) > Date.now() ? new Date(a.until[m]) : null;
+  return { of, left: until ? 0 : Math.max(0, of - used), until, unit: cf ? 'нейронов' : 'токенов', cf };
+}
+const atWhen = d => `${iso(d) === today() ? '' : dayWord(iso(d)) + ' '}в ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function aiLine(a, m) {
+  const l = aiLeft(a, m);
+  if (!l.left) return `на сегодня закончилась${l.until ? `, снова ${atWhen(l.until)}` : ''}`;
+  return `осталось ${thou(l.left)} из ${thou(l.of)} ${l.unit}${l.cf ? ' · общие на Cloudflare' : ''}`;
+}
+const aiBar = (a, m, w) => { const l = aiLeft(a, m); return `<div class="aibar${w ? ' w' : ''}"><i style="width:${Math.round(l.left / l.of * 100)}%"></i></div>`; };
+const aiNow = a => (a.models || []).find(m => aiLeft(a, m).left > 0);
+function aiCard() {
+  const a = Sync.ai;
+  if (!a?.models) return '';
+  const now = aiNow(a);
+  const top = now ? `<div class="k">Сейчас разбирает</div><div class="nm">${esc(aiName(now))}<small>${aiWhere(now)}</small></div>${aiBar(a, now, 1)}<div class="n">${aiLine(a, now)}</div>`
+    : (() => { const u = a.models.map(m => aiLeft(a, m).until).filter(Boolean).sort((x, y) => x - y)[0];
+      return `<div class="k">Сейчас разбирает</div><div class="nm">Никто</div><div class="n">У всех пяти лимит на сегодня закончился.${u ? ` Разбор продолжится ${atWhen(u)}.` : ''}</div>`; })();
+  return `${grp('Нейросеть', '')}<div class="card glass"><div class="aib">${top}</div>
+    ${row2('Все нейросети', `${a.models.length} по очереди`, { chev: 1, act: 'ais' })}</div>`;
+}
+function aiSheet() {
+  const a = Sync.ai, now = aiNow(a);
+  sheet(`<h3>Нейросети</h3><p class="txt" style="padding:0 4px">Разбирают письма, чаты и заметки по очереди. Когда у одной кончается лимит на сегодня, работу берёт следующая. Остаток примерный: его считает сама программа.</p>
+    <div class="card glass aisl">${a.models.map(m => `<div class="air${aiLeft(a, m).left ? '' : ' off'}"><div class="h"><span>${esc(aiName(m))}</span><small>${aiWhere(m)}${m === 'openai/gpt-oss-20b' ? ' · ошибается чаще' : ''}</small>${m === now ? '<span class="now">сейчас</span>' : ''}</div>
+      ${aiBar(a, m)}<div class="n">${aiLine(a, m)}</div></div>`).join('')}</div>`);
+}
+
 // Telegram's row in «Сбор задач»: not connected / waiting for the first check / checked / signed out
 const TG_NOTE = { limit: 'Telegram: нейросеть исчерпала лимит на сегодня, остальное разберу завтра.', ai: 'Telegram: нейросеть не ответила, повторю через полчаса.', more: 'Сообщений много — разбираю Telegram по частям.' };
 function tgState() {
@@ -535,7 +573,7 @@ function notesState() {
 SCREENS.settings = () => inner('Ещё', 'more', 'Настройки', '', `
   ${grp('Обо мне', '')}<div class="card glass">${row2('Как к Вам обращаться', esc(S().settings.name), { chev: 1, act: 'name' })}</div>
   ${grp(S().settings.tg?.at ? 'Люди и чаты' : 'Люди', '')}<div class="card glass">${row2('Кто есть кто', N(S().people.length, ['человек', 'человека', 'человек']), { chev: 1, go: 'people' })}${S().settings.tg?.at ? row2('Чаты Telegram', chatsWord(), { chev: 1, go: 'chats' }) : ''}</div>
-  ${Sync.on ? grp('Сбор задач', '') + collectCard() : ''}
+  ${Sync.on ? grp('Сбор задач', '') + collectCard() + aiCard() : ''}
   ${grp('Хранение', '')}${storageCard()}
   ${Sync.on ? '' : `${grp('Примерные задачи', '')}<div class="card glass">${S().demo
     ? row2('Стереть примерные задачи<small>и начать с чистого листа</small>', '', { chev: 1, act: 'cleardemo' })
@@ -923,6 +961,7 @@ const A = {
   tgdone: () => { ui.tgpick = null; ui.scroll = {}; Nav.intent = { anim: 'pop', stack: 'reset' }; location.replace('#/settings'); },
   tggroup: el => { const p = S().settings.tg, id = el.dataset.id, g = (p.groups || []).filter(x => x !== id); if (g.length === (p.groups || []).length) g.push(id); Store.act('settings', { settings: { tg: { ...p, groups: g } } }); },
   tgoff: el => { const p = S().settings.tg, id = el.dataset.id, o = (p.off || []).filter(x => x !== id); if (o.length === (p.off || []).length) o.push(id); Store.act('settings', { settings: { tg: { ...p, off: o } } }); },
+  ais: () => Sync.ai && aiSheet(),
   ghcopy: async () => toast(await copy(ui.ghkey) ? 'Ключ скопирован' : 'Не получилось скопировать'),
   ghstart: () => { ui.ghwasdemo = S().demo; ghStep(() => Sync.start(ui.ghp, ui.ghkey), 'gh/done'); },
   ghdone: () => { ui.ghp = ui.ghkey = null; ui.scroll = {}; Nav.intent = { anim: 'pop', stack: 'reset' }; location.replace('#/settings'); },

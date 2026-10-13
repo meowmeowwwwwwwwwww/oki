@@ -249,6 +249,22 @@ body.r-home #bg .b3{right:auto;left:10px;width:380px;height:300px;bottom:-120px}
 .note{text-align:center;font-size:12.5px;color:var(--ink2);margin-top:14px;font-weight:300}
 .ws{font-size:13px;color:var(--ink2);font-weight:300;margin-top:3px}
 .ws b{font-weight:500;color:var(--ink)}
+/* «Нейросеть» card in settings and the «Нейросети» sheet (mock _mock/ai.html, variant Б) */
+.aib{padding:16px 16px 14px;border-bottom:1px solid var(--line)}
+.aib .k{font:400 11px var(--mono);letter-spacing:.12em;color:var(--ink3);text-transform:uppercase}
+.aib .nm{font-weight:300;font-size:28px;letter-spacing:-.03em;margin-top:6px;line-height:1.1}
+.aib .nm small{font-size:14px;color:var(--ink2);letter-spacing:0;margin-left:6px}
+.aib .n,.air .n{font-size:12.5px;color:var(--ink2);font-weight:300;margin-top:5px}
+.aibar{height:6px;border-radius:3px;background:rgba(17,19,23,.1);overflow:hidden;margin-top:8px}
+.aibar i{display:block;height:100%;border-radius:3px;background:var(--ink)}
+.aibar.w{height:10px;border-radius:5px;margin-top:12px}
+.aisl{background:rgba(255,255,255,.6)}
+.air{padding:12px 16px 13px;border-bottom:1px solid var(--line)}
+.air:last-child{border:0}
+.air .h{display:flex;align-items:baseline;gap:8px;font-size:15px}
+.air .h small{font-size:12.5px;color:var(--ink2);font-weight:300}
+.air.off .h,.air.off .n{color:var(--ink3)}
+.air .now{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:11px;background:var(--ink);color:#fff;font-size:11.5px;margin-left:auto;flex:none;align-self:center}
 .it2{padding:12px 16px;border-bottom:1px solid var(--line)}
 .it2:last-child{border:0}
 .it2 .src{font-size:12px;color:var(--ink3);margin-bottom:3px}
