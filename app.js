@@ -505,9 +505,10 @@ function collectCard() {
     fallback = m.model && !m.model.startsWith('qwen/') ? row2('Нейросеть', 'запасная') : '';
     mailRow = row2(`<span class="${bad.length || stale ? 'dotbad' : 'dotok'}"></span>Почта`, `проверено ${hmWhen(m.at)}`);
   }
-  const t = tgState();
+  const t = tgState(), n = notesState();
   if (t.line) lines.push(t.line);
-  return `<div class="card glass">${mailRow}${t.row}
+  if (n.line) lines.push(n.line);
+  return `<div class="card glass">${mailRow}${t.row}${n.row}
     ${lines.length ? `<div class="it2"><div class="t">${lines.join('<br>')}</div></div>` : ''}${fallback}
     ${row2('Проверить сейчас', '', { chev: 1, act: 'collect' })}</div>`;
 }
@@ -520,6 +521,15 @@ function tgState() {
   if (!s || s.at < on) return { row: row2('<span class="dotok"></span>Telegram', 'проверю через пару минут') };
   const line = s.state === 'offline' || s.state === 'flood' ? 'Telegram не ответил. Попробую через полчаса.' : TG_NOTE[s.note];
   return { row: row2(`<span class="${s.state === 'ok' ? 'dotok' : 'dotbad'}"></span>Telegram`, `проверено ${hmWhen(s.state === 'ok' ? s.at : s.ok_at || s.at)}`), line };
+}
+
+// notes from the iPhone: Shortcuts hand them to the Oki shell, the collector reads them (TZ §5)
+const NOTES_NOTE = { limit: 'Заметки: нейросеть исчерпала лимит на сегодня, остальное разберу завтра.', ai: 'Заметки: нейросеть не ответила, повторю через полчаса.', more: 'Заметок много — разбираю по частям.' };
+function notesState() {
+  const on = S().settings.notes?.at, s = Sync.notes?.status;
+  if (!on) return { row: row2('Заметки', 'подключить', { chev: 1, go: 'notes' }) };
+  if (!s?.got) return { row: row2('<span class="dotok"></span>Заметки', 'жду первую', { chev: 1, go: 'notes' }) };
+  return { row: row2('<span class="dotok"></span>Заметки', `получены ${hmWhen(s.got)}`, { chev: 1, go: 'notes' }), line: NOTES_NOTE[s.note] };
 }
 
 SCREENS.settings = () => inner('Ещё', 'more', 'Настройки', '', `
@@ -607,6 +617,27 @@ SCREENS.tg = r => {
     <h1>Подключим Telegram</h1><p>Я буду читать «Избранное» и личные чаты и находить в них задачи. Группы — только те, что Вы сами отметите. Я ничего не пишу и не отмечаю прочитанным.</p>
     <div class="bt"><button class="btn-main" data-go="tg/site">Дальше</button></div></div>`;
 };
+/* ---------- Notes: «Oki объясняет», one step per screen ---------- */
+const shell = () => !!window.webkit?.messageHandlers?.oki; // the Oki app on the iPhone (oki-ios), not Safari
+SCREENS.notes = r => {
+  const step = r.id || 'intro';
+  const one = (h, p, bt, rb = 'calm') => `<div class="onb sm">${tgBack}<div class="rb">${RABBIT(rb, '', true)}</div><h1>${h}</h1><p>${p}</p><div class="bt">${bt}</div></div>`;
+  if (!shell() && step !== 'intro') return SCREENS.notes({});
+  if (step === 'auto') return one('Шаг 1. Когда', 'В «Командах» откройте <b>Автоматизация</b> и нажмите <b>+</b>. Выберите <b>Приложение</b> → <b>Заметки</b>. Отметьте <b>Закрыто</b>, уберите <b>Открыто</b>, выберите <b>Запускать сразу</b> и нажмите <b>Далее</b>.',
+    `<a class="btn-main" href="shortcuts://" data-act="notesopen">Открыть «Команды»</a><button class="btn-ghost" data-go="notes/what" style="margin-top:8px">Сделано</button>`);
+  if (step === 'what') return one('Шаг 2. Что делать', 'Нажмите <b>Новая пустая автоматизация</b>. Найдите действие <b>Найти заметки</b> и добавьте его, ничего в нём не меняя. Затем найдите <b>Oki</b> → <b>Отправить заметки в Oki</b>. Нажмите <b>Готово</b>.',
+    `<button class="btn-main" data-act="notessave">Сделано</button>`);
+  if (step === 'done') return `<div class="onb"><span class="logo" style="font-size:34px">Oki</span><div class="rb">${RABBIT('happy', '', true)}</div>
+    <h1>Почти готово.</h1><p>Откройте «Заметки» и сразу закройте: так я запомню, что там уже есть, и задач из старого не будет. Если iPhone спросит, можно ли передать заметки Oki, нажмите <b>Всегда разрешать</b>. Всё, что Вы напишете потом, — моё: задача появится в течение получаса.</p>
+    <div class="bt"><button class="btn-main" data-act="tgdone">Хорошо</button></div></div>`;
+  if (!shell()) return `<div class="onb">${tgBack}<span class="logo" style="font-size:34px">Oki</span><div class="rb">${RABBIT('calm', '', true)}</div>
+    <h1>Нужен Oki<br>на iPhone</h1><p>Заметки подключаются только в приложении Oki на iPhone. Обновите его в <b>SideStore</b> и откройте эту страницу там.</p>
+    <div class="bt"><button class="btn-main" data-act="tgdone">Хорошо</button></div></div>`;
+  return `<div class="onb">${tgBack}<span class="logo" style="font-size:34px">Oki</span><div class="rb">${RABBIT('calm', '', true)}</div>
+    <h1>Подключим заметки</h1><p>Пишите в «Заметках», как привыкли. Когда Вы их закрываете, iPhone тихо отдаёт мне новое — зашифрованным. Я нахожу там задачи, а в старой заметке читаю только дописанное.</p>
+    <div class="bt"><button class="btn-main" data-go="notes/auto">Дальше</button></div></div>`;
+};
+
 // her chats: what the collector last saw, or what the phone saw while logging in
 const tgChats = () => Sync.tg?.chats?.length ? Sync.tg.chats : ui.tgchats || [];
 function chatsWord() {
@@ -887,6 +918,8 @@ const A = {
     Sync.collect().catch(() => {}); setTimeout(() => Sync.run(), 150e3);
     go('tg/done');
   },
+  notesopen: () => setTimeout(() => go('notes/what'), 600),
+  notessave: () => { Store.act('settings', { settings: { notes: { at: Store.stamp() } } }); go('notes/done'); },
   tgdone: () => { ui.tgpick = null; ui.scroll = {}; Nav.intent = { anim: 'pop', stack: 'reset' }; location.replace('#/settings'); },
   tggroup: el => { const p = S().settings.tg, id = el.dataset.id, g = (p.groups || []).filter(x => x !== id); if (g.length === (p.groups || []).length) g.push(id); Store.act('settings', { settings: { tg: { ...p, groups: g } } }); },
   tgoff: el => { const p = S().settings.tg, id = el.dataset.id, o = (p.off || []).filter(x => x !== id); if (o.length === (p.off || []).length) o.push(id); Store.act('settings', { settings: { tg: { ...p, off: o } } }); },
