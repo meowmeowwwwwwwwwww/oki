@@ -561,6 +561,34 @@ function tgState() {
   return { row: row2(`<span class="${s.state === 'ok' ? 'dotok' : 'dotbad'}"></span>Telegram`, `проверено ${hmWhen(s.state === 'ok' ? s.at : s.ok_at || s.at)}`), line };
 }
 
+// Reminders (Даша 2026-10-18): the Oki app on the iPhone puts them on the phone itself, like alarms (ios/Oki/Notify.swift).
+// After every change the app hands it the whole list from notify.js; the shell answers with okiBell('on' | 'off' | 'ask').
+const bell = () => window.webkit?.messageHandlers?.okiNotify;
+let bellState = null, bellT = 0;
+window.okiBell = st => { const was = bellState; bellState = st; if (was !== st && Nav.cur?.r.name === 'settings') render(); };
+const bellAsk = () => { try { bell().postMessage({ ask: true }); } catch (e) {} };
+function bellSend() {
+  const h = bell(); if (!h) return;
+  clearTimeout(bellT);
+  bellT = setTimeout(() => { // examples never ring
+    const d = Store.data();
+    try { h.postMessage({ made: Store.stamp(), plan: S().demo ? [] : Notify.plan(d), known: d.tasks.map(t => t.id), quiet: Notify.opts(d.settings).quiet }); } catch (e) {}
+  }, 400);
+}
+Store.on(bellSend);
+bellSend();
+const setBell = o => Store.act('settings', { settings: { notify: Object.assign(Notify.opts(S().settings), o) } });
+const hm0 = hm => hm.replace(/^0(\d)/, '$1'); // 08:30 → 8:30, as in the design
+function bellCard() {
+  const o = Notify.opts(S().settings);
+  const head = !window.webkit?.messageHandlers?.oki ? `<div class="it2"><div class="t">Уведомления приходят в приложении Oki на iPhone.</div></div>`
+    : !bell() ? `<div class="it2"><div class="t">Чтобы приходили уведомления, обновите Oki: SideStore → Oki → «Обновить».</div></div>`
+    : bellState && bellState !== 'on' ? row2('Уведомления', '<span class="pill dark">Включить</span>', { act: 'bellon' }) : '';
+  return `${grp('Уведомления', '')}<div class="card glass">${head}
+    <div class="row2 chev"><div class="t">Утренний план</div><div class="v">${hm0(o.morning)}</div><input class="over" type="time" value="${o.morning}" data-change="morning" aria-label="Утренний план"></div>
+    ${row2('Тихие часы', `${hm0(o.quiet[0])}–${hm0(o.quiet[1])}`, { chev: 1, act: 'quiet' })}</div>`;
+}
+
 // notes from the iPhone: Shortcuts hand them to the Oki shell, the collector reads them (TZ §5)
 const NOTES_NOTE = { limit: 'Заметки: нейросеть исчерпала лимит на сегодня, остальное разберу завтра.', ai: 'Заметки: нейросеть не ответила, повторю через полчаса.', more: 'Заметок много — разбираю по частям.' };
 function notesState() {
@@ -574,6 +602,7 @@ SCREENS.settings = () => inner('Ещё', 'more', 'Настройки', '', `
   ${grp('Обо мне', '')}<div class="card glass">${row2('Как к Вам обращаться', esc(S().settings.name), { chev: 1, act: 'name' })}</div>
   ${grp(S().settings.tg?.at ? 'Люди и чаты' : 'Люди', '')}<div class="card glass">${row2('Кто есть кто', N(S().people.length, ['человек', 'человека', 'человек']), { chev: 1, go: 'people' })}${S().settings.tg?.at ? row2('Чаты Telegram', chatsWord(), { chev: 1, go: 'chats' }) : ''}</div>
   ${Sync.on ? grp('Сбор задач', '') + collectCard() + aiCard() : ''}
+  ${bellCard()}
   ${grp('Хранение', '')}${storageCard()}
   ${Sync.on ? '' : `${grp('Примерные задачи', '')}<div class="card glass">${S().demo
     ? row2('Стереть примерные задачи<small>и начать с чистого листа</small>', '', { chev: 1, act: 'cleardemo' })
@@ -893,7 +922,7 @@ const A = {
   close: closeSheet,
   back: el => back(el.dataset.to),
   mic: () => toast('Запись голосом появится чуть позже'),
-  'onb-bell': async () => { try { if ('Notification' in window) await Notification.requestPermission(); } catch (e) {} Nav.intent = { anim: 'fade', stack: 'reset' }; Store.setFlag('onboarded', true); },
+  'onb-bell': async () => { try { if (bell()) bellAsk(); else if ('Notification' in window) await Notification.requestPermission(); } catch (e) {} Nav.intent = { anim: 'fade', stack: 'reset' }; Store.setFlag('onboarded', true); },
   'onb-later': () => { Nav.intent = { anim: 'fade', stack: 'reset' }; Store.setFlag('onboarded', true); },
   near: el => { ui.cal = el.dataset.d; ui.month = ui.cal.slice(0, 7); go('cal'); },
   chip: el => { ui.chip[el.dataset.a] = el.dataset.v; render(); },
@@ -942,6 +971,9 @@ const A = {
   j2task: el => { const j = S().journal.find(x => x.id === el.dataset.id); openAdd({ text: j.title.replace(/[«»]/g, ''), journal: j.id }); },
   back2task: el => { Store.act('task_back', { ref: el.dataset.id }); toast('Возвращено в задачи'); },
   arch: el => { ui.arch = el.dataset.v; render(); },
+  bellon: () => bellState === 'off' ? sheet(`<h3>Уведомления выключены</h3><p class="txt" style="padding:0 4px">Вы запретили их раньше, поэтому включить можно только в настройках iPhone: Настройки → Приложения → Oki → Уведомления → «Допуск уведомлений».</p><button class="btn-main" data-act="close">Понятно</button>`) : bellAsk(),
+  quiet: () => { const q = Notify.opts(S().settings).quiet; sheet(`<form data-submit="quiet"><h3>Тихие часы</h3><p class="txt" style="padding:0 4px">В это время уведомления приходят без звука и не зажигают экран.</p>
+    <div class="rows">${dateRow('from', q[0], 'С', 'time')}${dateRow('to', q[1], 'До', 'time')}</div><button class="btn-main" type="submit">Сохранить</button></form>`); },
   name: () => { sh = { mode: 'name' }; sheet(`<form data-submit="name"><h3>Как к Вам обращаться</h3><input class="in" name="name" value="${esc(S().settings.name)}" autocomplete="off"><button class="btn-main" type="submit">Сохранить</button></form>`); },
   person: el => openPerson(el.dataset.id ? S().people.find(p => p.id === el.dataset.id) : null),
   delperson: el => { Store.act('person_delete', { ref: el.dataset.id }); closeSheet(); },
@@ -1067,6 +1099,7 @@ const SUBMIT = {
     Store.act('task_move', { ref: sh.id, area: sh.area, group }); closeSheet(); toast('Перенесено');
   },
   item: f => { const v = f.v.value.trim(); if (!v) return; Store.act('item_add', { ref: f.dataset.id, text: v }); setTimeout(() => $('.chk .add input')?.focus(), 30); },
+  quiet: f => { if (f.from.value && f.to.value) setBell({ quiet: [f.from.value, f.to.value] }); closeSheet(); },
   name: f => { const v = f.name.value.trim(); if (v) Store.act('settings', { settings: { name: v } }); closeSheet(); },
   person: f => {
     const name = f.name.value.trim(); if (!name) { f.name.focus(); return; }
@@ -1086,6 +1119,7 @@ document.addEventListener('submit', e => { e.preventDefault(); const f = e.targe
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('textarea[name="title"]')) { e.preventDefault(); e.target.form.requestSubmit(); } });
 document.addEventListener('change', e => {
   const el = e.target;
+  if (el.dataset.change === 'morning' && el.value) setBell({ morning: el.value });
   if (el.dataset.change === 'due') Store.act('task_due', { ref: el.dataset.id, due: el.value || null, time: Store.task(el.dataset.id).time });
   if (el.dataset.change === 'time') {
     const t = Store.task(el.dataset.id);

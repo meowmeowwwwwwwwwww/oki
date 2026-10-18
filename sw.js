@@ -1,6 +1,6 @@
 // Oki offline: always try the network first (fresh app), fall back to the last saved copy.
-const CACHE = 'oki-v6';
-const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'motion.js', 'store.js', 'sync.js', 'tg.js', 'sample.js', 'icon.svg', 'icon-180.png', 'manifest.webmanifest'];
+const CACHE = 'oki-v7';
+const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'motion.js', 'store.js', 'sync.js', 'notify.js', 'tg.js', 'sample.js', 'icon.svg', 'icon-180.png', 'manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
