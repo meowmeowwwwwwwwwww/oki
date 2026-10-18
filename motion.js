@@ -9,7 +9,7 @@ const PH = { home: 'Напишите задачу…', work: AREAS.work.ph, stud
 const isTab = n => TABS.includes(n);
 const view = $('#view');
 const W = () => view.clientWidth;
-const BG = '<div class="pbg"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i></div>';
+const BG = '<div class="pbg"><i class="lens l1"></i><i class="lens l2"></i><i class="lens l3"></i><i class="lens l4"></i><i class="wash"></i><i class="pink"></i></div>';
 
 // cur: the screen on show; stack: route keys of pushed screens (mirrors browser history)
 // quiet: the address a swipe has already switched to, its own hashchange has nothing left to do

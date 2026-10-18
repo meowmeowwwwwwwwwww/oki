@@ -63,9 +63,9 @@ const srcWords = t => [...new Set(srcAll(t).map(s => srcWord(s.kind)).filter(Boo
 
 /* ---------- rabbit (moods: ears + eyes + glow together) ---------- */
 const MOOD = {
-  happy: { l: 10, r: -12, fill: 'aFillWarm', aura: '#D2A6F0', ao: 1 },
-  calm: { l: 0, r: 0, fill: 'aFill', aura: '#A9AEF0', ao: .85 },
-  sad: { l: -88, r: 88, fill: 'aFillGrey', aura: '#B4B8C4', ao: .45 },
+  happy: { l: 10, r: -12, fill: 'aFillWarm', aura: '#fff', ao: 1 },
+  calm: { l: 0, r: 0, fill: 'aFill', aura: '#fff', ao: .95 },
+  sad: { l: -88, r: 88, fill: 'aFillGrey', aura: '#fff', ao: .6 },
 };
 function RABBIT(mood = 'calm', cls = '', float = false) {
   const m = MOOD[mood];
@@ -73,10 +73,10 @@ function RABBIT(mood = 'calm', cls = '', float = false) {
     <g transform="rotate(${m.r} 120 118)"><ellipse cx="128" cy="70" rx="17" ry="54" transform="rotate(18 128 70)"/></g>
     <ellipse cx="100" cy="140" rx="56" ry="46"/><ellipse cx="100" cy="206" rx="46" ry="40"/>`;
   const eyes = mood === 'happy'
-    ? `<g fill="none" stroke="#111317" stroke-width="4.5" stroke-linecap="round"><path d="M72 146 Q80 133 88 146"/><path d="M112 146 Q120 133 128 146"/></g>`
+    ? `<g fill="none" stroke="#1F2D5C" stroke-width="4.5" stroke-linecap="round"><path d="M72 146 Q80 133 88 146"/><path d="M112 146 Q120 133 128 146"/></g>`
     : mood === 'sad'
-      ? `<g class="eyes" fill="#111317"><ellipse cx="81" cy="149" rx="5" ry="7"/><ellipse cx="119" cy="149" rx="5" ry="7"/></g>`
-      : `<g class="eyes" fill="#111317"><ellipse cx="80" cy="140" rx="5.5" ry="9"/><ellipse cx="120" cy="140" rx="5.5" ry="9"/></g>`;
+      ? `<g class="eyes" fill="#1F2D5C"><ellipse cx="81" cy="149" rx="5" ry="7"/><ellipse cx="119" cy="149" rx="5" ry="7"/></g>`
+      : `<g class="eyes" fill="#1F2D5C"><ellipse cx="80" cy="140" rx="5.5" ry="9"/><ellipse cx="120" cy="140" rx="5.5" ry="9"/></g>`;
   const body = `<g class="au" fill="${m.aura}" filter="url(#aura)" opacity="${m.ao}">${shapes}</g><g fill="url(#${m.fill})" filter="url(#soft)">${shapes}</g>${eyes}`;
   return `<svg class="${cls}" viewBox="-30 -10 260 290" aria-hidden="true">${float ? `<g class="float">${body}</g>` : body}</svg>`;
 }
@@ -90,7 +90,7 @@ const LOUPE = '<svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="6"/><path d="M1
 const BELL = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>';
 function RING(p) {
   const r = 12, L = 2 * Math.PI * r;
-  return `<svg class="ring" viewBox="0 0 28 28"><circle cx="14" cy="14" r="${r}" stroke="rgba(17,19,23,.14)"/><circle cx="14" cy="14" r="${r}" stroke="#111317" stroke-dasharray="${(L * p).toFixed(1)} ${L.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 14 14)"/></svg>`;
+  return `<svg class="ring" viewBox="0 0 28 28"><circle cx="14" cy="14" r="${r}" stroke="rgba(229,143,180,.22)"/><circle cx="14" cy="14" r="${r}" stroke="#E58FB4" stroke-dasharray="${(L * p).toFixed(1)} ${L.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 14 14)"/></svg>`;
 }
 
 /* ---------- selectors ---------- */
@@ -128,7 +128,7 @@ const ui = { chip: { work: 'all', study: 'all' }, open: {}, cal: today(), month:
 const grp = (n, c, cls = '') => `<div class="grp ${cls}">${esc(n)}<span>${c}</span></div>`;
 // tab icons (variant 2, Даша 2026-10-12): rabbit, briefcase, book, heart, calendar in a floating glass capsule
 const TABI = {
-  home: '<ellipse cx="9" cy="7" rx="2.2" ry="5" transform="rotate(-12 9 7)"/><ellipse cx="15" cy="7" rx="2.2" ry="5" transform="rotate(12 15 7)"/><circle cx="12" cy="15.5" r="5.5"/>',
+  home: '<path d="M8.56 11.21A2.2 5 -12 1 1 11.27 10.05M12.73 10.05A2.2 5 12 1 1 15.44 11.21"/><circle cx="12" cy="15.5" r="5.5"/>', // ears stop at the head, no lines inside it
   work: '<rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/><path d="M9 7.5V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v1.5M3 12.5h18"/>',
   study: '<path d="M12 6.8C10 5.3 7 4.8 3.5 5.3v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5v-13c-3.5-.5-6.5 0-8.5 1.5zM12 6.8v13"/>',
   personal: '<path d="M12 19.5s-7.5-4.4-7.5-9.8A4.1 4.1 0 0 1 12 7.4a4.1 4.1 0 0 1 7.5 2.3c0 5.4-7.5 9.8-7.5 9.8z"/>',
